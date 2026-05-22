@@ -84,7 +84,9 @@ let currentState = {
   activeTeamId: null,
   empFilterTeamIds: [],
   projFilterTeamIds: [],
-  taskFilterTeamIds: []
+  taskFilterTeamIds: [],
+  globalFilterYear: '',
+  globalFilterMonth: ''
 };
 
 window.setProjectContext = function(id) {
@@ -203,6 +205,41 @@ function showToast(msg, type = 'info') {
 function openModal(id) { const m = document.getElementById(id); if (m) m.classList.add('open'); }
 function closeModal(id) { const m = document.getElementById(id); if (m) { m.classList.remove('open'); const f = m.querySelector('form'); if(f) f.reset(); } }
 function formatDate(isoStr) { return isoStr ? new Date(isoStr).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; }
+
+function itemMatchesGlobalDateFilter(item) {
+  const year = currentState.globalFilterYear;
+  const month = currentState.globalFilterMonth;
+  if (!year && !month) return true;
+
+  let dateToTest = null;
+  if (item.deadline) {
+    dateToTest = new Date(item.deadline);
+  } else if (item.createdAt) {
+    dateToTest = new Date(item.createdAt);
+  } else if (item.updatedAt) {
+    dateToTest = new Date(item.updatedAt);
+  }
+
+  if (!dateToTest || isNaN(dateToTest.getTime())) return false;
+
+  if (year && dateToTest.getFullYear().toString() !== year) return false;
+  if (month) {
+    const mStr = (dateToTest.getMonth() + 1).toString().padStart(2, '0');
+    if (mStr !== month) return false;
+  }
+  return true;
+}
+
+window.applyGlobalDateFilter = function() {
+  currentState.globalFilterYear = document.getElementById('global-filter-year').value;
+  currentState.globalFilterMonth = document.getElementById('global-filter-month').value;
+  
+  const hasFilter = currentState.globalFilterYear || currentState.globalFilterMonth;
+  const badge = document.getElementById('global-date-badge');
+  if (badge) badge.style.display = hasFilter ? 'block' : 'none';
+  
+  renderCurrentView();
+};
 function getInitials(name) { return name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '?'; }
 function getLabelsHtml(labelIds) {
   if (!labelIds || !labelIds.length) return '';
@@ -228,6 +265,9 @@ async function renderDashboard() {
   await updateGlobalState();
   let tasks = await getActiveTasks();
   if (currentState.activeProjectId) tasks = tasks.filter(t => t.projectId === currentState.activeProjectId);
+  if (currentState.globalFilterYear || currentState.globalFilterMonth) {
+    tasks = tasks.filter(itemMatchesGlobalDateFilter);
+  }
   const now = Date.now();
   const endOfWeek = new Date();
   endOfWeek.setDate(endOfWeek.getDate() + ((7 - endOfWeek.getDay()) % 7 || 7));
@@ -259,6 +299,9 @@ async function renderDashboard() {
 
   let notes = await getAllNotes();
   if (currentState.activeProjectId) notes = notes.filter(n => n.projectId === currentState.activeProjectId);
+  if (currentState.globalFilterYear || currentState.globalFilterMonth) {
+    notes = notes.filter(itemMatchesGlobalDateFilter);
+  }
   const recentNotes = notes.slice(0, 1);
   if (recentNotes.length === 0) DOM.dashboardNotes.innerHTML = '<div class="empty-state"><p>Žádné zápisy z porad.</p></div>';
   else DOM.dashboardNotes.innerHTML = recentNotes.map(n => createNoteCard(n)).join('');
@@ -318,6 +361,9 @@ async function renderDashboardProjectSummary(allTasks) {
 // ==========================================
 async function renderTasks() {
   let tasks = await getAllTasks();
+  if (currentState.globalFilterYear || currentState.globalFilterMonth) {
+    tasks = tasks.filter(itemMatchesGlobalDateFilter);
+  }
   if (currentState.searchTask) {
     const q = currentState.searchTask.toLowerCase();
     tasks = tasks.filter(t => {
@@ -357,19 +403,12 @@ async function renderTasks() {
     tasks = tasks.filter(t => t.labelIds && t.labelIds.includes(lblId));
   }
   if (currentState.taskFilter === 'my') {
-    const ownerName = await getSetting('ownerName') || '';
-    let meFound = false;
-    if (ownerName) {
-      const me = (await getAllEmployees()).find(e => e.name.toLowerCase() === ownerName.toLowerCase());
-      if (me) {
-        tasks = tasks.filter(t => {
-          const empIds = t.employeeIds || (t.employeeId ? [t.employeeId] : []);
-          return empIds.includes(me.id);
-        });
-        meFound = true;
-      }
-    }
-    if (!meFound) tasks = [];
+    const ownerName = (await getSetting('ownerName') || '').trim().toLowerCase();
+    tasks = tasks.filter(t => {
+      const empIds = t.employeeIds || (t.employeeId ? [t.employeeId] : []);
+      const empNames = empIds.map(id => (currentState.employeesMap[id]?.name || '').trim().toLowerCase());
+      return empNames.some(n => ownerName && n.includes(ownerName));
+    });
   }
 
   document.querySelectorAll('#task-filters .filter-chip').forEach(f => f.classList.toggle('active', f.dataset.f === currentState.taskFilter));
@@ -406,10 +445,10 @@ function getPriorityBadge(t) {
     if (dl < Date.now()) html += '<span class="badge badge-overdue">⚠️ Zpoždění</span>';
     else if (dl < Date.now() + 48*3600*1000) html += '<span class="badge badge-soon">🟠 Do 48h</span>';
     else if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Nízká</span>';
+    else html += '<span class="badge badge-low">🟢 Běžná</span>';
   } else {
     if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Nízká</span>';
+    else html += '<span class="badge badge-low">🟢 Běžná</span>';
   }
   return html;
 }
@@ -589,6 +628,11 @@ async function renderProjTopTeamChips() {
 // 7. Render: Employees
 // ==========================================
 async function renderEmployees() {
+  const btnEmp = document.getElementById('btn-bulk-delete-employee');
+  if (btnEmp) btnEmp.style.display = 'none';
+  const btnTeam = document.getElementById('btn-bulk-delete-team');
+  if (btnTeam) btnTeam.style.display = 'none';
+
   await renderEmployeesSidebar();
   let emps = await getAllEmployees();
   if (currentState.searchEmp) {
@@ -626,7 +670,8 @@ async function renderEmployees() {
     DOM.empList.innerHTML = `<div class="empty-state"><p>Nenalezeny záznamy.</p></div>`;
   } else {
     let html = paginatedEmps.map(e => `
-      <div class="card employee-row" onclick="showEmployeeDetail(${e.id})" style="cursor:pointer; opacity: ${e.isActive===false?0.6:1}; padding: 16px; margin-bottom:12px;">
+      <div class="card employee-row" onclick="showEmployeeDetail(${e.id})" style="cursor:pointer; opacity: ${e.isActive===false?0.6:1}; padding: 16px; margin-bottom:12px; display:flex; align-items:center;">
+        <input type="checkbox" class="bulk-select-checkbox" data-id="${e.id}" data-type="employee" onclick="event.stopPropagation(); onBulkSelectChange('employee');" style="width:18px; height:18px; margin-right:12px; cursor:pointer;" />
         <div class="employee-avatar">${e.photo ? `<img src="${e.photo}">` : getInitials(e.name)}</div>
         <div class="employee-info">
           <div class="employee-name">${e.name} ${e.isActive===false?'(Archív)':''}</div>
@@ -665,12 +710,15 @@ async function renderEmployees() {
         const active = currentState.activeTeamId === t.id;
         const count = allEmpsForCount.filter(e => e.teamIds && e.teamIds.includes(t.id)).length;
         return `
-          <div class="card" style="padding:10px 16px; margin-bottom:12px; cursor:pointer; background:#fff; border:none; box-shadow:0 2px 6px rgba(0,0,0,0.03); transition:all 0.2s ease; ${active ? 'box-shadow: 0 0 0 2px var(--accent);' : ''}" onclick="setTeamContext(${t.id}); renderCurrentView();" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'">
-            <div style="font-size:0.95rem; font-weight:600; margin-bottom:4px; display:flex; justify-content:space-between">
-              ${t.name}
-              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editTeam(${t.id})" style="padding:0; min-height:0; height:auto; color:var(--text-muted)" title="Upravit tým">✏️</button>
+          <div class="card" style="padding:10px 16px; margin-bottom:12px; cursor:pointer; background:#fff; border:none; box-shadow:0 2px 6px rgba(0,0,0,0.03); transition:all 0.2s ease; ${active ? 'box-shadow: 0 0 0 2px var(--accent);' : ''}; display:flex; align-items:center;" onclick="setTeamContext(${t.id}); renderCurrentView();" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'">
+            <input type="checkbox" class="bulk-select-checkbox" data-id="${t.id}" data-type="team" onclick="event.stopPropagation(); onBulkSelectChange('team');" style="width:16px; height:16px; margin-right:10px; cursor:pointer;" />
+            <div style="flex:1">
+              <div style="font-size:0.95rem; font-weight:600; margin-bottom:4px; display:flex; justify-content:space-between">
+                ${t.name}
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editTeam(${t.id})" style="padding:0; min-height:0; height:auto; color:var(--text-muted)" title="Upravit tým">✏️</button>
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-secondary)">Zobrazených členů: ${count}</div>
             </div>
-            <div style="font-size:0.8rem; color:var(--text-secondary)">Zobrazených členů: ${count}</div>
           </div>
         `;
       }).join('');
@@ -766,7 +814,9 @@ async function showEmployeeDetail(id) {
 // ==========================================
 // 8. Render: Projects & Notes
 // ==========================================
-async function renderProjects() {
+  const btnProj = document.getElementById('btn-bulk-delete-project');
+  if (btnProj) btnProj.style.display = 'none';
+
   const projs = await getAllProjects();
   const activeProjs = projs.filter(p => p.status !== 'done');
   
@@ -855,6 +905,9 @@ async function renderProjects() {
       });
       filteredProjs = filteredProjs.filter(p => validProjectIds.has(p.id));
     }
+    if (currentState.globalFilterYear || currentState.globalFilterMonth) {
+      filteredProjs = filteredProjs.filter(itemMatchesGlobalDateFilter);
+    }
 
     if (filteredProjs.length === 0) listContainer.innerHTML = `<div class="empty-state"><p>Zatím žádné projekty.</p></div>`;
     else {
@@ -872,24 +925,27 @@ async function renderProjects() {
         const empCount = allEmps.filter(e => e.projectIds && e.projectIds.includes(p.id)).length;
         
         return `
-          <div class="card" onclick="setProjectContext(${p.id}); renderCurrentView();" style="cursor:pointer; display:flex; flex-direction:column; gap:12px">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start">
-              <div>
-                <div class="card-title" style="display:flex; align-items:center; gap:8px">
-                  ${p.name}
-                  <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editProject(${p.id})" style="padding:4px; height:auto; min-height:0" title="Upravit projekt">✏️</button>
+          <div class="card" onclick="setProjectContext(${p.id}); renderCurrentView();" style="cursor:pointer; display:flex; flex-direction:row; gap:16px; align-items:center">
+            <input type="checkbox" class="bulk-select-checkbox" data-id="${p.id}" data-type="project" onclick="event.stopPropagation(); onBulkSelectChange('project');" style="width:18px; height:18px; cursor:pointer;" />
+            <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start">
+                <div>
+                  <div class="card-title" style="display:flex; align-items:center; gap:8px">
+                    ${p.name}
+                    <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editProject(${p.id})" style="padding:4px; height:auto; min-height:0" title="Upravit projekt">✏️</button>
+                  </div>
+                  <div class="card-subtitle">Vytvořeno: ${formatDate(p.createdAt)}</div>
+                  ${p.labelIds ? `<div style="margin-top:4px">${getLabelsHtml(p.labelIds)}</div>` : ''}
                 </div>
-                <div class="card-subtitle">Vytvořeno: ${formatDate(p.createdAt)}</div>
-                ${p.labelIds ? `<div style="margin-top:4px">${getLabelsHtml(p.labelIds)}</div>` : ''}
+                <span class="badge ${p.status === 'done' ? 'badge-done' : 'badge-active'}">${p.status === 'done' ? 'Dokončeno' : 'Aktivní'}</span>
               </div>
-              <span class="badge ${p.status === 'done' ? 'badge-done' : 'badge-active'}">${p.status === 'done' ? 'Dokončeno' : 'Aktivní'}</span>
-            </div>
-            <div style="display:flex; gap:16px; flex-wrap:wrap; background:var(--bg-elevated); padding:10px; border-radius:var(--radius-sm)">
-              <div style="font-size:0.85rem; color:var(--text-secondary)">Lidí: <strong style="color:var(--text-primary)">${empCount}</strong></div>
-              <div style="font-size:0.85rem; color:var(--text-secondary)">Úkolů: <strong style="color:var(--text-primary)">${total}</strong></div>
-              <div style="font-size:0.85rem; color:var(--text-secondary)">Hotovo: <strong style="color:var(--green)">${done}</strong></div>
-              <div style="font-size:0.85rem; color:var(--text-secondary)">Urgentní: <strong style="color:var(--red)">${urgent}</strong></div>
-              <div style="font-size:0.85rem; color:var(--text-secondary)">Do 48h: <strong style="color:var(--orange)">${soon}</strong></div>
+              <div style="display:flex; gap:16px; flex-wrap:wrap; background:var(--bg-elevated); padding:10px; border-radius:var(--radius-sm)">
+                <div style="font-size:0.85rem; color:var(--text-secondary)">Lidí: <strong style="color:var(--text-primary)">${empCount}</strong></div>
+                <div style="font-size:0.85rem; color:var(--text-secondary)">Úkolů: <strong style="color:var(--text-primary)">${total}</strong></div>
+                <div style="font-size:0.85rem; color:var(--text-secondary)">Hotovo: <strong style="color:var(--green)">${done}</strong></div>
+                <div style="font-size:0.85rem; color:var(--text-secondary)">Urgentní: <strong style="color:var(--red)">${urgent}</strong></div>
+                <div style="font-size:0.85rem; color:var(--text-secondary)">Do 48h: <strong style="color:var(--orange)">${soon}</strong></div>
+              </div>
             </div>
           </div>
         `;
@@ -899,6 +955,9 @@ async function renderProjects() {
 }
 
 async function renderNotes() {
+  const btnNote = document.getElementById('btn-bulk-delete-note');
+  if (btnNote) btnNote.style.display = 'none';
+
   const projs = await getAllProjects();
   const activeProjs = projs.filter(p => p.status !== 'done');
   
@@ -947,6 +1006,9 @@ async function renderNotes() {
     notes = notes.filter(n => n.title.toLowerCase().includes(q) || (n.content||'').toLowerCase().includes(q));
   }
   if (currentState.activeProjectId) notes = notes.filter(n => n.projectId === currentState.activeProjectId);
+  if (currentState.globalFilterYear || currentState.globalFilterMonth) {
+    notes = notes.filter(itemMatchesGlobalDateFilter);
+  }
   
   const monthFilter = document.getElementById('note-filter-month');
   if (monthFilter) {
@@ -988,10 +1050,13 @@ async function renderNotes() {
 function createNoteCard(n) {
   const snippet = n.content ? n.content.replace(/[#*`_-]/g, '').substring(0, 100) + '...' : 'Prázdný zápis';
   return `
-    <div class="card" onclick="viewNote(${n.id})" style="cursor:pointer">
-      <div class="card-title">${n.title}</div>
-      <div class="card-subtitle" style="margin-bottom:8px">${snippet}</div>
-      <div class="card-meta"><span>⏱ ${formatDate(n.updatedAt)}</span></div>
+    <div class="card" onclick="viewNote(${n.id})" style="cursor:pointer; display:flex; flex-direction:row; gap:16px; align-items:center">
+      <input type="checkbox" class="bulk-select-checkbox" data-id="${n.id}" data-type="note" onclick="event.stopPropagation(); onBulkSelectChange('note');" style="width:18px; height:18px; cursor:pointer;" />
+      <div style="flex:1">
+        <div class="card-title">${n.title}</div>
+        <div class="card-subtitle" style="margin-bottom:8px">${snippet}</div>
+        <div class="card-meta"><span>⏱ ${formatDate(n.updatedAt)}</span></div>
+      </div>
     </div>
   `;
 }
@@ -1820,11 +1885,11 @@ window.exportTasksToWord = async () => {
   if (currentState.taskFilter === 'in-progress') tasks = tasks.filter(t => t.status === 'in-progress');
   if (currentState.taskFilter === 'done') tasks = tasks.filter(t => t.status === 'done');
   if (currentState.taskFilter === 'my') {
-    const myName = (await getSetting('ownerName')) || 'CEO';
+    const ownerName = (await getSetting('ownerName') || '').trim().toLowerCase();
     tasks = tasks.filter(t => {
       const empIds = t.employeeIds || (t.employeeId ? [t.employeeId] : []);
-      const empNames = empIds.map(id => currentState.employeesMap[id]?.name || '');
-      return empNames.some(n => n.includes(myName));
+      const empNames = empIds.map(id => (currentState.employeesMap[id]?.name || '').trim().toLowerCase());
+      return empNames.some(n => ownerName && n.includes(ownerName));
     });
   }
   
@@ -2133,6 +2198,49 @@ function setupEventListeners() {
       currentState.importPayload = null; await populateGlobalEmployeeFilter(); renderCurrentView();
     } catch(err) { showToast('Chyba při importu', 'error'); }
   });
+
+  window.onBulkSelectChange = function(type) {
+    const checkboxes = document.querySelectorAll(`.bulk-select-checkbox[data-type="${type}"]:checked`);
+    const count = checkboxes.length;
+    const btn = document.getElementById(`btn-bulk-delete-${type}`);
+    if (btn) {
+      btn.style.display = count > 0 ? 'inline-flex' : 'none';
+      const countSpan = btn.querySelector('.bulk-count');
+      if (countSpan) countSpan.textContent = count;
+    }
+  };
+
+  window.performBulkDelete = async function(type) {
+    const checkboxes = document.querySelectorAll(`.bulk-select-checkbox[data-type="${type}"]:checked`);
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+    if (ids.length === 0) return;
+
+    let msg = 'Opravdu chcete smazat vybrané položky?';
+    if (type === 'project') msg = 'Opravdu chcete smazat vybrané projekty? Odpojí se od všech úkolů a lidí.';
+    if (type === 'employee') msg = 'Opravdu chcete smazat vybrané lidi? Odpojí se od všech úkolů.';
+    
+    if (confirm(msg)) {
+      try {
+        for (const id of ids) {
+          if (type === 'employee') await deleteEmployee(id);
+          else if (type === 'team') await deleteTeam(id);
+          else if (type === 'project') await deleteProject(id);
+          else if (type === 'note') await deleteNote(id);
+        }
+        
+        const btn = document.getElementById(`btn-bulk-delete-${type}`);
+        if (btn) btn.style.display = 'none';
+        
+        showToast('Vybrané položky byly smazány', 'success');
+        if (type === 'employee') {
+          await populateGlobalEmployeeFilter();
+        }
+        renderCurrentView();
+      } catch (err) {
+        showToast('Chyba při hromadném mazání', 'error');
+      }
+    }
+  };
 
   document.getElementById('btn-task-delete').addEventListener('click', async () => {
     if (confirm('Opravdu smazat?')) { const id = document.getElementById('task-id').value; if (id) { await deleteTask(parseInt(id)); closeModal('modal-task'); showToast('Smazáno'); renderCurrentView(); } }

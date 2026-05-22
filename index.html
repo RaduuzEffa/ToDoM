@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <link rel="icon" href="favicon.png"/>
   <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css"/>
-  <link rel="stylesheet" href="style.css?v=44"/>
+  <link rel="stylesheet" href="style.css?v=45"/>
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
 </head>
 <body>
@@ -40,52 +40,6 @@
       </div>
     </div>
     <div class="header-right-group">
-      <!-- DATE FILTER -->
-      <div style="position:relative;">
-        <button class="btn btn-ghost btn-icon" id="btn-global-date" title="Filtrovat podle období" onclick="const d = document.getElementById('global-date-dropdown'); d.style.display = d.style.display === 'block' ? 'none' : 'block'">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          <span id="global-date-badge" style="display:none; position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--red); border-radius:50%"></span>
-        </button>
-        <div id="global-date-dropdown" style="display:none; position:absolute; top:100%; right:0; background:var(--surface-bg); border:1px solid var(--border); box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:16px; z-index:9999; width:220px; border-radius:var(--radius-md); margin-top:8px; text-align:left;">
-          <div style="margin-bottom:12px;">
-            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Rok</label>
-            <select class="form-control" id="global-filter-year" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
-              <option value="">Všechny</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-              <option value="2027">2027</option>
-              <option value="2028">2028</option>
-            </select>
-          </div>
-          <div style="margin-bottom:4px;">
-            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Měsíc</label>
-            <select class="form-control" id="global-filter-month" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
-              <option value="">Všechny</option>
-              <option value="01">Leden</option>
-              <option value="02">Únor</option>
-              <option value="03">Březen</option>
-              <option value="04">Duben</option>
-              <option value="05">Květen</option>
-              <option value="06">Červen</option>
-              <option value="07">Červenec</option>
-              <option value="08">Srpen</option>
-              <option value="09">Září</option>
-              <option value="10">Říjen</option>
-              <option value="11">Listopad</option>
-              <option value="12">Prosinec</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <button class="btn btn-ghost btn-icon" id="btn-global-search" title="Hledat napříč aplikací">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      </button>
-      <button class="btn btn-ghost btn-icon" id="btn-settings" title="Nastavení">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-      </button>
-    </div>
-  </header>
       <!-- DATE FILTER -->
       <div style="position:relative;">
         <button class="btn btn-ghost btn-icon" id="btn-global-date" title="Filtrovat podle období" onclick="const d = document.getElementById('global-date-dropdown'); d.style.display = d.style.display === 'block' ? 'none' : 'block'">
@@ -234,7 +188,7 @@
           <button class="filter-chip" data-f="my">Moje</button>
           <button class="filter-chip" data-f="urgent">🔴 Urgentní</button>
           <button class="filter-chip" data-f="soon">🟠 Do 48h</button>
-          <button class="filter-chip" data-f="low">🟢 Nízká</button>
+          <button class="filter-chip" data-f="low">🟢 Běžná</button>
           <select class="form-control" id="task-filter-label" style="width:160px; height:36px; padding:0 12px; border-radius:18px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; background-color: var(--accent-dim); cursor:pointer; text-align:center; text-align-last:center; font-size:0.85rem;">
             <option value="" data-color="">Všechny štítky</option>
           </select>
@@ -311,14 +265,20 @@
           <div style="flex:1" class="kanban-column">
              <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
                <div class="kanban-title" style="margin:0">Týmy</div>
-               <button class="btn btn-ghost btn-sm" onclick="openNewTeamModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               <div style="display:flex; gap:6px; align-items:center;">
+                 <button class="btn btn-danger btn-sm" id="btn-bulk-delete-team" style="display:none; padding:4px 8px; min-height:0; height:auto; font-size:0.8rem;" onclick="performBulkDelete('team')">🗑 Smazat (<span class="bulk-count">0</span>)</button>
+                 <button class="btn btn-ghost btn-sm" onclick="openNewTeamModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               </div>
              </div>
              <div class="kanban-list" id="employees-teams-list"></div>
           </div>
           <div style="flex:1" class="kanban-column">
              <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
                <div class="kanban-title" style="margin:0">Lidé</div>
-               <button class="btn btn-ghost btn-sm" onclick="openNewEmployeeModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               <div style="display:flex; gap:6px; align-items:center;">
+                 <button class="btn btn-danger btn-sm" id="btn-bulk-delete-employee" style="display:none; padding:4px 8px; min-height:0; height:auto; font-size:0.8rem;" onclick="performBulkDelete('employee')">🗑 Smazat (<span class="bulk-count">0</span>)</button>
+                 <button class="btn btn-ghost btn-sm" onclick="openNewEmployeeModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               </div>
              </div>
              <div class="kanban-list" id="employees-list"></div>
           </div>
@@ -350,6 +310,7 @@
             <div style="display:flex; flex-wrap:wrap; gap:8px;" id="proj-top-team-filter-chips"></div>
           </div>
           <div style="display:flex; gap:12px; align-items:center">
+            <button class="btn btn-danger btn-sm" id="btn-bulk-delete-project" style="display:none; padding:4px 12px; height:32px; border-radius:16px; font-size:0.85rem;" onclick="performBulkDelete('project')">🗑 Smazat (<span class="bulk-count">0</span>)</button>
             <div style="position:relative; display:inline-block;" id="proj-team-dropdown-container">
               <button class="btn btn-secondary" onclick="document.getElementById('proj-team-checkboxes').style.display = document.getElementById('proj-team-checkboxes').style.display === 'none' ? 'block' : 'none'" style="background:var(--accent-dim); color:var(--accent); border-color:var(--accent); font-weight:600; border-radius:16px;">
                 Všechny týmy ▾
@@ -406,6 +367,7 @@
             <svg style="position:absolute; left:10px; top:10px" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input class="form-control" id="note-search" placeholder="Hledat zápisy…" type="search" style="padding-left:36px"/>
           </div>
+          <button class="btn btn-danger btn-sm" id="btn-bulk-delete-note" style="display:none; padding:4px 12px; height:44px; border-radius:18px; font-size:0.85rem;" onclick="performBulkDelete('note')">🗑 Smazat (<span class="bulk-count">0</span>)</button>
           <select class="form-control" id="note-filter-month" style="min-width:160px; max-width:220px; border: 1px solid var(--accent); color: var(--accent); text-align: center; text-align-last: center; font-weight: 600; background-color: var(--accent-dim);">
             <option value="">Všechny měsíce</option>
           </select>
@@ -477,7 +439,7 @@
         <div class="form-group">
           <label class="form-label">Priorita</label>
           <select class="form-control" id="task-priority">
-            <option value="low">🟢 Nízká</option>
+            <option value="low">🟢 Běžná</option>
             <option value="medium" selected>🟠 Do 48 hodin</option>
             <option value="urgent">🔴 Urgentní</option>
           </select>
@@ -924,7 +886,7 @@ window.addEventListener("unhandledrejection", function(e) {
   alert("Promise Rejection: " + e.reason);
 });
 </script>
-<script src="db.js?v=43"></script>
-<script src="app.js?v=43"></script>
+<script src="db.js?v=45"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'todaom-v44';
+const CACHE_NAME = 'todaom-v45';
 const ASSETS = [
   './',
   './index.html',
