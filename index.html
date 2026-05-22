@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>ToDoM – Task Manager</title>
+  <meta name="description" content="Interní správa úkolů a zaměstnanců"/>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#ffffff"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ToDoM"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <link rel="icon" href="favicon.png"/>
+  <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css"/>
+  <link rel="stylesheet" href="style.css?v=44"/>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+</head>
+<body>
+<div id="bg-mesh"></div>
+<div id="toast-container"></div>
+
+<div id="app">
+  <!-- TOP HEADER -->
+  <header class="top-header">
+    <div class="header-left-group">
+      <img src="icon.png" alt="Logo" class="header-logo-img"/>
+      <div class="header-title-container">
+        <h1 id="header-title">ToDoM</h1>
+        <div class="header-logo-subtitle">
+          <span>T</span><span>A</span><span>S</span><span>K</span><span style="width:4px;"></span><span>M</span><span>A</span><span>N</span><span>A</span><span>G</span><span>E</span><span>R</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-middle-group">
+      <div id="header-sub" style="font-size:0.9rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:2px">Dashboard</div>
+      <div id="header-project-context" style="display:none; align-items:center; gap:6px; margin-top:8px">
+        <span class="badge" style="background:var(--accent); color:white; font-size:0.85rem; padding:4px 10px; border-radius:20px" id="header-project-name"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-clear-project-context" style="padding:4px 10px; height:auto; min-height:0; color:var(--red); font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:12px; background:var(--red-dim);" title="Zrušit filtr">ZRUŠIT</button>
+      </div>
+    </div>
+    <div class="header-right-group">
+      <!-- DATE FILTER -->
+      <div style="position:relative;">
+        <button class="btn btn-ghost btn-icon" id="btn-global-date" title="Filtrovat podle období" onclick="const d = document.getElementById('global-date-dropdown'); d.style.display = d.style.display === 'block' ? 'none' : 'block'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="global-date-badge" style="display:none; position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--red); border-radius:50%"></span>
+        </button>
+        <div id="global-date-dropdown" style="display:none; position:absolute; top:100%; right:0; background:var(--surface-bg); border:1px solid var(--border); box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:16px; z-index:9999; width:220px; border-radius:var(--radius-md); margin-top:8px; text-align:left;">
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Rok</label>
+            <select class="form-control" id="global-filter-year" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
+              <option value="">Všechny</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+            </select>
+          </div>
+          <div style="margin-bottom:4px;">
+            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Měsíc</label>
+            <select class="form-control" id="global-filter-month" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
+              <option value="">Všechny</option>
+              <option value="01">Leden</option>
+              <option value="02">Únor</option>
+              <option value="03">Březen</option>
+              <option value="04">Duben</option>
+              <option value="05">Květen</option>
+              <option value="06">Červen</option>
+              <option value="07">Červenec</option>
+              <option value="08">Srpen</option>
+              <option value="09">Září</option>
+              <option value="10">Říjen</option>
+              <option value="11">Listopad</option>
+              <option value="12">Prosinec</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-icon" id="btn-global-search" title="Hledat napříč aplikací">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </button>
+      <button class="btn btn-ghost btn-icon" id="btn-settings" title="Nastavení">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      </button>
+    </div>
+  </header>
+      <!-- DATE FILTER -->
+      <div style="position:relative;">
+        <button class="btn btn-ghost btn-icon" id="btn-global-date" title="Filtrovat podle období" onclick="const d = document.getElementById('global-date-dropdown'); d.style.display = d.style.display === 'block' ? 'none' : 'block'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="global-date-badge" style="display:none; position:absolute; top:4px; right:4px; width:8px; height:8px; background:var(--red); border-radius:50%"></span>
+        </button>
+        <div id="global-date-dropdown" style="display:none; position:absolute; top:100%; right:0; background:var(--surface-bg); border:1px solid var(--border); box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:16px; z-index:9999; width:220px; border-radius:var(--radius-md); margin-top:8px; text-align:left;">
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Rok</label>
+            <select class="form-control" id="global-filter-year" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
+              <option value="">Všechny</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+            </select>
+          </div>
+          <div style="margin-bottom:4px;">
+            <label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Měsíc</label>
+            <select class="form-control" id="global-filter-month" style="width:100%; height:32px; font-size:0.85rem;" onchange="applyGlobalDateFilter()">
+              <option value="">Všechny</option>
+              <option value="01">Leden</option>
+              <option value="02">Únor</option>
+              <option value="03">Březen</option>
+              <option value="04">Duben</option>
+              <option value="05">Květen</option>
+              <option value="06">Červen</option>
+              <option value="07">Červenec</option>
+              <option value="08">Srpen</option>
+              <option value="09">Září</option>
+              <option value="10">Říjen</option>
+              <option value="11">Listopad</option>
+              <option value="12">Prosinec</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-icon" id="btn-global-search" title="Hledat napříč aplikací">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </button>
+      <button class="btn btn-ghost btn-icon" id="btn-settings" title="Nastavení">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- VIEWS -->
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard" class="view active">
+    <div class="layout-container">
+      
+      <!-- SIDEBAR -->
+      <div class="sidebar-column">
+        <div class="section-title" style="margin-top:0;">Přehled projektů</div>
+        <div style="background: rgba(15, 23, 42, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); padding:20px; border-radius:var(--radius-lg)">
+          <div id="dashboard-projects-summary"></div>
+        </div>
+      </div>
+      
+      <!-- MAIN COLUMN -->
+      <div class="main-column">
+        <div class="section-title" style="margin-top:0">Přehled dnes</div>
+        <div class="semafor-grid" id="semafor-grid">
+          <div class="semafor-card red" data-filter="urgent">
+            <div class="semafor-count" id="count-urgent">0</div>
+            <div class="semafor-label">🔴 Urgentní</div>
+          </div>
+          <div class="semafor-card orange" data-filter="soon">
+            <div class="semafor-count" id="count-soon">0</div>
+            <div class="semafor-label">🟠 Do 48h</div>
+          </div>
+          <div class="semafor-card green" data-filter="normal">
+            <div class="semafor-count" id="count-normal">0</div>
+            <div class="semafor-label">🟢 Aktivní</div>
+          </div>
+        </div>
+        <div class="section-title">Nejnovější zápis</div>
+        <div id="dashboard-notes"></div>
+        <div class="section-title" style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Úkoly podle termínu</span>
+          <div id="dash-pagination" style="font-size:0.8rem; display:flex; gap:8px">
+            <button id="dash-prev" class="btn btn-ghost btn-sm" style="padding:4px">⬅️</button>
+            <span id="dash-page-info" style="align-self:center">1/1</span>
+            <button id="dash-next" class="btn btn-ghost btn-sm" style="padding:4px">➡️</button>
+          </div>
+        </div>
+        <div id="dashboard-tasks"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TASKS (KANBAN) -->
+  <section id="view-tasks" class="view">
+    <div class="layout-container">
+      
+      <!-- SIDEBAR -->
+      <div class="sidebar-column">
+        <div class="section-title" style="margin-top:0;">Přehled projektů</div>
+        <div style="margin-top: 25px; background: rgba(15, 23, 42, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); padding:20px; border-radius:var(--radius-lg)">
+          <div id="tasks-projects-summary"></div>
+        </div>
+      </div>
+
+      <!-- MAIN COLUMN -->
+      <div class="main-column">
+        <style>
+          .tasks-top-grid {
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            column-gap: 16px;
+            row-gap: 12px;
+            max-width: calc(min(100vw - 40px, 400px) * 3 + 32px);
+            margin-bottom: 16px;
+            align-items: center;
+          }
+        </style>
+        
+        <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; width: 100%;">
+          <!-- Col 1: Search -->
+          <div style="flex: 1; min-width: 300px; position:relative;">
+            <svg style="position:absolute; left:12px; top:12px; color:var(--text-muted)" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input class="form-control" id="task-search" placeholder="Hledat úkoly…" type="search" style="padding-left:38px; width:100%; height:44px;"/>
+          </div>
+          
+          <!-- Col 2: Teams -->
+          <div style="flex: 1; min-width: 300px; position:relative;" id="task-team-dropdown-container">
+            <button onclick="const b = document.getElementById('task-team-checkboxes'); b.style.display = b.style.display === 'block' ? 'none' : 'block'" class="form-control" style="width:100%; height:44px; padding:0 8px; font-size:1rem; border-radius:18px; border: 1px solid var(--accent); color: var(--accent); text-align: center; font-weight: 600; background-color: var(--accent-dim); cursor:pointer;">Všechny týmy ▾</button>
+            <div id="task-team-checkboxes" style="display:none; position:absolute; top:100%; left:0; background:#fff; border:1px solid var(--border); box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:12px; z-index:999; width:100%; border-radius:var(--radius-md); max-height:300px; overflow-y:auto; margin-top:4px; text-align:left;">
+            </div>
+          </div>
+          
+          <!-- Col 3: Employees -->
+          <div style="flex: 1; min-width: 300px;">
+            <select class="form-control" id="task-filter-emp" style="width:100%; height:44px; padding:0 8px; font-size:1rem; border-radius:18px; border: 1px solid var(--accent); color: var(--accent); text-align: center; text-align-last: center; font-weight: 600; background-color: var(--accent-dim);">
+              <option value="">Všichni lidé</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Filter Chips + Labels -->
+        <div class="filter-bar" id="task-filters" style="display: flex; gap: 10px; margin-bottom: 16px; padding-bottom: 4px; overflow-x: auto; scrollbar-width: none; align-items:center;">
+          <button class="filter-chip active" data-f="all">Vše</button>
+          <button class="filter-chip" data-f="my">Moje</button>
+          <button class="filter-chip" data-f="urgent">🔴 Urgentní</button>
+          <button class="filter-chip" data-f="soon">🟠 Do 48h</button>
+          <button class="filter-chip" data-f="low">🟢 Nízká</button>
+          <select class="form-control" id="task-filter-label" style="width:160px; height:36px; padding:0 12px; border-radius:18px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; background-color: var(--accent-dim); cursor:pointer; text-align:center; text-align-last:center; font-size:0.85rem;">
+            <option value="" data-color="">Všechny štítky</option>
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="exportTasksToWord()" style="height:36px; padding:0 12px; border-radius:18px; white-space:nowrap; margin-left:auto;">📄 Export do Wordu</button>
+        </div>
+        
+        <!-- KANBAN BOARD -->
+        <div class="kanban-board">
+      <div class="kanban-column">
+        <div class="kanban-header">
+          <div class="kanban-title">K vyřízení</div>
+          <div class="kanban-count" id="count-col-active">0</div>
+        </div>
+        <div class="kanban-list" id="kanban-active" data-status="active"></div>
+      </div>
+      <div class="kanban-column">
+        <div class="kanban-header">
+          <div class="kanban-title">Rozpracované</div>
+          <div class="kanban-count" id="count-col-in-progress">0</div>
+        </div>
+        <div class="kanban-list" id="kanban-in-progress" data-status="in-progress"></div>
+      </div>
+      <div class="kanban-column">
+        <div class="kanban-header">
+          <div class="kanban-title">Hotovo</div>
+          <div class="kanban-count" id="count-col-done">0</div>
+        </div>
+        <div class="kanban-list" id="kanban-done" data-status="done"></div>
+      </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMPLOYEES -->
+  <section id="view-employees" class="view">
+    <div class="layout-container">
+      
+      <!-- SIDEBAR -->
+      <div class="sidebar-column">
+        <div class="section-title" style="margin-top:0;">Týmy a Projekty</div>
+        <div style="margin-top: 25px; background: rgba(15, 23, 42, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); padding:20px; border-radius:var(--radius-lg)">
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="setProjectContext(null); setTeamContext(null); renderCurrentView();">Všechny Projekty</button>
+          </div>
+          <div id="employees-sidebar-list"></div>
+        </div>
+      </div>
+
+      <!-- MAIN COLUMN -->
+      <div class="main-column">
+        <div class="search-wrap" style="display:flex; gap:12px; margin-bottom:12px; width:100%;">
+          <div style="flex:1; position:relative; width:100%;">
+            <svg style="position:absolute; left:12px; top:12px" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input class="form-control" id="emp-search" placeholder="Hledat lidi…" type="search" style="padding-left:40px; width:85%; box-sizing:border-box !important;"/>
+          </div>
+        </div>
+        <div class="filter-bar" style="margin-bottom:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; overflow:visible !important; position:relative; z-index:50;">
+          <button class="filter-chip active" data-ef="all" id="ef-all">Všichni</button>
+          <button class="filter-chip" data-ef="active" id="ef-active">Aktivní</button>
+          <button class="filter-chip" data-ef="inactive" id="ef-inactive">Archív</button>
+          <div style="position:relative; display:inline-block; margin-left:8px;" id="emp-team-dropdown-container">
+            <button class="btn btn-secondary" onclick="document.getElementById('emp-team-checkboxes').style.display = document.getElementById('emp-team-checkboxes').style.display === 'none' ? 'block' : 'none'" style="background:var(--accent-dim); color:var(--accent); border-color:var(--accent); font-weight:600; padding:4px 12px; height:32px; border-radius:16px;">
+              Všechny týmy ▾
+            </button>
+            <div id="emp-team-checkboxes" style="display:none; position:absolute; top:100%; left:0; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; z-index:100; min-width:220px; max-height:300px; overflow-y:auto; margin-top:4px; box-shadow:0 4px 12px rgba(0,0,0,0.1)">
+              <!-- populated dynamically -->
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;" id="emp-top-team-filter-chips"></div>
+        
+        <div style="display:flex; gap:24px; align-items:flex-start;">
+          <div style="flex:1" class="kanban-column">
+             <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
+               <div class="kanban-title" style="margin:0">Týmy</div>
+               <button class="btn btn-ghost btn-sm" onclick="openNewTeamModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+             </div>
+             <div class="kanban-list" id="employees-teams-list"></div>
+          </div>
+          <div style="flex:1" class="kanban-column">
+             <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
+               <div class="kanban-title" style="margin:0">Lidé</div>
+               <button class="btn btn-ghost btn-sm" onclick="openNewEmployeeModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+             </div>
+             <div class="kanban-list" id="employees-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROJECTS -->
+  <section id="view-projects" class="view">
+    <div class="layout-container">
+      
+      <!-- SIDEBAR -->
+      <div class="sidebar-column">
+        <div class="section-title" style="margin-top:0;">Seznam projektů</div>
+        <div style="margin-top: 25px; background: rgba(15, 23, 42, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); padding:20px; border-radius:var(--radius-lg)">
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="setProjectContext(null); renderCurrentView();">Všechny Projekty</button>
+          </div>
+          <div id="projects-sidebar-list"></div>
+        </div>
+      </div>
+
+      <!-- MAIN COLUMN -->
+      <div class="main-column">
+        <div style="margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:50;">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="section-title" style="margin:0" id="projects-main-title">Všechny projekty</div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;" id="proj-top-team-filter-chips"></div>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center">
+            <div style="position:relative; display:inline-block;" id="proj-team-dropdown-container">
+              <button class="btn btn-secondary" onclick="document.getElementById('proj-team-checkboxes').style.display = document.getElementById('proj-team-checkboxes').style.display === 'none' ? 'block' : 'none'" style="background:var(--accent-dim); color:var(--accent); border-color:var(--accent); font-weight:600; border-radius:16px;">
+                Všechny týmy ▾
+              </button>
+              <div id="proj-team-checkboxes" style="display:none; position:absolute; top:100%; right:0; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; z-index:100; min-width:220px; max-height:300px; overflow-y:auto; margin-top:4px; box-shadow:0 4px 12px rgba(0,0,0,0.1); text-align:left;">
+                <!-- populated dynamically -->
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="openNewProjectModal()">➕ Nový projekt</button>
+          </div>
+        </div>
+        <div id="projects-list"></div>
+        <div id="project-detail-view" style="display:none">
+          <div style="display:flex; gap:24px; align-items:flex-start;">
+            <div style="flex:1" class="kanban-column">
+               <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
+                 <div class="kanban-title" style="margin:0">Týmy</div>
+                 <button class="btn btn-ghost btn-sm" onclick="openNewTeamModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               </div>
+               <div class="kanban-list" id="project-detail-teams"></div>
+            </div>
+            <div style="flex:1" class="kanban-column">
+               <div class="kanban-header" style="display:flex; justify-content:space-between; align-items:center;">
+                 <div class="kanban-title" style="margin:0">Zápisy</div>
+                 <button class="btn btn-ghost btn-sm" onclick="openNewNoteModal()" style="padding:4px; min-height:0; height:auto">➕ Nový</button>
+               </div>
+               <div class="kanban-list" id="project-detail-notes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NOTES -->
+  <section id="view-notes" class="view">
+    <div class="layout-container">
+      
+      <!-- SIDEBAR -->
+      <div class="sidebar-column">
+        <div class="section-title" style="margin-top:0;">Projekty</div>
+        <div style="margin-top: 25px; background: rgba(15, 23, 42, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(15, 23, 42, 0.06); box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); padding:20px; border-radius:var(--radius-lg)">
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="setProjectContext(null); renderCurrentView();">Všechny zápisy</button>
+          </div>
+          <div id="notes-projects-summary"></div>
+        </div>
+      </div>
+
+      <!-- MAIN COLUMN -->
+      <div class="main-column">
+        <div class="search-wrap" style="display:flex; gap:12px; margin-bottom:16px">
+          <div style="flex:1; position:relative">
+            <svg style="position:absolute; left:10px; top:10px" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input class="form-control" id="note-search" placeholder="Hledat zápisy…" type="search" style="padding-left:36px"/>
+          </div>
+          <select class="form-control" id="note-filter-month" style="min-width:160px; max-width:220px; border: 1px solid var(--accent); color: var(--accent); text-align: center; text-align-last: center; font-weight: 600; background-color: var(--accent-dim);">
+            <option value="">Všechny měsíce</option>
+          </select>
+        </div>
+        <div id="notes-list" class="sortable-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOTTOM NAV -->
+  <nav id="bottom-nav">
+    <div class="bottom-nav-inner">
+      <div class="bottom-nav-spacer"></div>
+      <div class="bottom-nav-links">
+        <button class="nav-item active" data-view="dashboard" id="nav-dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Home
+        </button>
+        <button class="nav-item" data-view="tasks" id="nav-tasks">
+          <div style="position:relative">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            <div class="nav-dot" id="urgent-dot" style="display:none"></div>
+          </div>
+          Úkoly
+        </button>
+        <button class="nav-item" data-view="projects" id="nav-projects">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Projekty
+        </button>
+        <button class="nav-item" data-view="employees" id="nav-employees">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Lidé
+        </button>
+        <button class="nav-item" data-view="notes" id="nav-notes">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Zápisy
+        </button>
+      </div>
+    </div>
+  </nav>
+</div>
+
+<!-- FAB (context-sensitive) -->
+<button class="fab" id="fab" style="display:none">
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- MODAL: Task -->
+<div class="modal-overlay" id="modal-task">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-task-title">Nový úkol</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-task">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-task">
+      <input type="hidden" id="task-id"/>
+      <div class="form-group">
+        <label class="form-label">Název úkolu *</label>
+        <input class="form-control" id="task-title" required placeholder="Co je potřeba udělat?"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Popis</label>
+        <textarea class="form-control" id="task-desc" placeholder="Volitelný popis…" rows="3"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Priorita</label>
+          <select class="form-control" id="task-priority">
+            <option value="low">🟢 Nízká</option>
+            <option value="medium" selected>🟠 Do 48 hodin</option>
+            <option value="urgent">🔴 Urgentní</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="task-status">
+            <option value="active" selected>K vyřízení</option>
+            <option value="in-progress">Rozpracované</option>
+            <option value="done">Hotovo ✓</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Deadline</label>
+          <input class="form-control" type="date" id="task-deadline"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Projekt</label>
+          <select class="form-control" id="task-project">
+            <option value="">— Mimo projekt —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Přiřadit (lze i více lidem)</label>
+        <select class="form-control" id="task-employee-select">
+          <option value="">— Vyberte osobu —</option>
+        </select>
+        <div id="task-employee-chips" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+      </div>
+      
+      <div class="form-group" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+        <label class="form-label">Checklist</label>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <input type="text" class="form-control" id="task-checklist-input" placeholder="Nová položka checklistu..."/>
+          <button type="button" class="btn btn-secondary" id="btn-add-checklist" style="padding: 0 16px;">Přidat</button>
+        </div>
+        <div id="task-checklist-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div class="form-group" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+        <label class="form-label">Poznámky k úkolu</label>
+        <div style="display:flex; gap:8px; margin-bottom:8px; align-items:flex-start;">
+          <textarea class="form-control" id="task-note-input" placeholder="Nová textová poznámka..." rows="2" style="flex:1;"></textarea>
+          <button type="button" class="btn btn-secondary" id="btn-add-task-note" style="padding: 0 16px; height: 100%;">Přidat</button>
+        </div>
+        <div id="task-notes-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div class="form-group" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+        <label class="form-label">Štítky (zobrazeny jen vybrané)</label>
+        <select class="form-control" id="task-label-select">
+          <option value="">— Přidat štítek —</option>
+        </select>
+        <div id="task-label-chips" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-task-delete" style="display:none">Smazat</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-secondary modal-close" data-modal="modal-task">Zrušit</button>
+        <button type="submit" class="btn btn-primary" id="btn-task-save">Uložit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Team -->
+<div class="modal-overlay" id="modal-team">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-team-title">Nový tým</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-team">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-team">
+      <input type="hidden" id="team-id"/>
+      <div class="form-group">
+        <label class="form-label">Název týmu *</label>
+        <input class="form-control" type="text" id="team-name" required/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Projekty, ve kterých tým působí</label>
+        <div id="team-projects-container" style="display:flex; flex-wrap:wrap; gap:8px"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-team-delete" style="display:none">Smazat</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-secondary modal-close" data-modal="modal-team">Zrušit</button>
+        <button type="submit" class="btn btn-primary" id="btn-team-save">Uložit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Employee -->
+<div class="modal-overlay" id="modal-employee">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-emp-title">Nový zaměstnanec</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-employee">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-employee">
+      <input type="hidden" id="emp-id"/>
+      
+      <div class="form-group" style="display:flex; gap:16px; align-items:center;">
+        <div class="employee-avatar" id="emp-photo-preview" style="width:72px; height:72px; font-size:1.8rem; cursor:pointer" title="Změnit fotku">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div>
+          <label class="form-label">Fotografie</label>
+          <input type="file" id="emp-photo-input" accept="image/*" class="form-control" style="padding:8px"/>
+          <input type="hidden" id="emp-photo-base64"/>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Celé jméno *</label>
+          <input class="form-control" id="emp-name" required placeholder="Jméno Příjmení"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pozice / Role</label>
+          <input class="form-control" id="emp-position" placeholder="např. Projektový manažer"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Oddělení</label>
+          <input class="form-control" id="emp-department" placeholder="např. Vývoj"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Přiřazeno k projektům</label>
+        <div id="emp-projects-container" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+          <!-- checkboxes populated dynamically -->
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Přiřazeno k týmům</label>
+        <div id="emp-teams-container" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+          <!-- checkboxes populated dynamically -->
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Štítky</label>
+        <div id="emp-labels-container" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-control" type="email" id="emp-email" placeholder="jmeno@firma.cz"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telefon</label>
+          <input class="form-control" type="tel" id="emp-phone" placeholder="+420 …"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Poznámky</label>
+        <textarea class="form-control" id="emp-notes" rows="2" placeholder="Volné poznámky…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-control" id="emp-active">
+          <option value="true">✅ Aktivní</option>
+          <option value="false">📦 Archív</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-emp-delete" style="display:none">Smazat</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-secondary modal-close" data-modal="modal-employee">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Uložit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Project -->
+<div class="modal-overlay" id="modal-project">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-proj-title">Nový projekt</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-project">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-project">
+      <input type="hidden" id="proj-id"/>
+      <div class="form-group">
+        <label class="form-label">Název projektu *</label>
+        <input class="form-control" id="proj-name" required placeholder="např. Redesign webu"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-control" id="proj-status">
+          <option value="active">Aktivní</option>
+          <option value="done">Dokončený</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Štítky</label>
+        <div id="proj-labels-container" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Lidé na projektu</label>
+        <input type="search" id="proj-emp-search-input" class="form-control btn-sm" placeholder="Filtrovat lidi…" style="margin-bottom:8px"/>
+        <div id="proj-employees-container" style="max-height:150px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);border:1px solid var(--border)">
+          <!-- checkboxes populated dynamically -->
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-proj-delete" style="display:none">Smazat</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-secondary modal-close" data-modal="modal-project">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Uložit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Note -->
+<div class="modal-overlay" id="modal-note">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-note-title">Nový zápis</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-note">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="form-note">
+      <input type="hidden" id="note-id"/>
+      <div class="form-group">
+        <label class="form-label">Název / Téma *</label>
+        <input class="form-control" id="note-title" required placeholder="např. Porada 15.5.2026"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Projekt</label>
+          <select class="form-control" id="note-project">
+            <option value="">— Mimo projekt —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Týmy</label>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="position:relative; width:100%;" id="note-team-dropdown-container">
+              <button type="button" onclick="const b = document.getElementById('note-team-checkboxes'); b.style.display = b.style.display === 'block' ? 'none' : 'block';" class="form-control" style="width:100%; text-align:left; background:#fff; cursor:pointer;">Vybrat týmy ▾</button>
+              <div id="note-team-checkboxes" style="display:none; position:absolute; top:100%; left:0; background:#fff; border:1px solid var(--border); box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:12px; z-index:999; width:100%; border-radius:var(--radius-md); max-height:200px; overflow-y:auto; margin-top:4px;">
+              </div>
+            </div>
+            <div id="note-team-chips" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obsah (Markdown)</label>
+        <textarea id="note-content-editor" placeholder="Obsah zápisu…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-note-delete" style="display:none">Smazat</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-secondary modal-close" data-modal="modal-note">Zrušit</button>
+        <button type="submit" class="btn btn-primary">Uložit</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: View Note -->
+<div class="modal-overlay" id="modal-view-note">
+  <div class="modal" style="max-width:800px; width:95%;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-view-note-title">Zápis</div>
+      <div style="display:flex; gap:8px">
+        <button class="btn btn-danger btn-sm" id="btn-view-delete" title="Smazat zápis">🗑 Smazat</button>
+        <button class="btn btn-secondary btn-sm" id="btn-export-word" title="Stáhnout do Wordu">📝 Do Wordu</button>
+        <button class="btn btn-primary btn-sm" id="btn-view-edit">✏️ Upravit</button>
+        <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-view-note">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div style="padding: 20px; font-size:1.05rem; line-height:1.6; max-height:70vh; overflow-y:auto;" id="note-read-content" class="prose max-w-none">
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Export Preview -->
+<div class="modal-overlay" id="modal-export-preview">
+  <div class="modal" style="width: 800px; max-width: 95vw;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">📄 Náhled Word Exportu</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-export-preview">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    
+    <div style="background: #e0e0e0; padding: 20px; border-radius: var(--radius-md); max-height: 60vh; display: flex; flex-direction: column;">
+      <iframe id="export-preview-content" style="background: white; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); flex: 1; min-height: 400px;"></iframe>
+    </div>
+    
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn btn-secondary modal-close" data-modal="modal-export-preview">Zrušit</button>
+      <button class="btn btn-primary" onclick="downloadWordExport()">Stáhnout jako Word</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Settings & Sync -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">⚙️ Nastavení a Zálohování</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-settings">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="section-title">Základní info</div>
+    <div class="form-group">
+      <label class="form-label">Název aplikace / Firmy</label>
+      <input class="form-control" id="set-app-name" placeholder="ToDoM"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Jméno vlastníka (CEO)</label>
+      <input class="form-control" id="set-owner-name" placeholder="Jméno Příjmení"/>
+    </div>
+    
+    <div class="section-title" style="margin-top:20px; display:flex; justify-content:space-between">
+      <span>Zálohování dat</span>
+      <button class="btn btn-secondary btn-sm" id="btn-manage-labels">Správa štítků</button>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px">
+      <button class="btn btn-primary" id="btn-export" style="flex:1">📥 Export zálohy</button>
+      <button class="btn btn-secondary" id="btn-import-trigger" style="flex:1">📤 Načíst zálohu</button>
+      <input type="file" id="import-file-input" accept=".json" style="display:none"/>
+    </div>
+    <div style="font-size:0.8rem;color:var(--text-muted);display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div id="last-export-info"></div>
+      <div id="last-import-info"></div>
+    </div>
+    <div class="card" id="sync-stats" style="margin-top:12px;padding:12px"></div>
+
+    <div class="modal-actions" style="margin-top:24px">
+      <button class="btn btn-secondary modal-close" data-modal="modal-settings">Zavřít</button>
+      <button class="btn btn-primary" id="btn-save-settings">Uložit jméno</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Import confirm -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" style="z-index:9999">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">📥 Import dat</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-import">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="import-file-info" class="card" style="margin-bottom:16px;font-size:0.83rem;color:var(--text-secondary)"></div>
+    <div class="import-option selected" id="opt-merge" data-mode="merge">
+      <div class="import-option-title">🔀 SLOUČIT (Merge)</div>
+      <div class="import-option-desc">Přidá nová data. Existující záznamy aktualizuje pouze pokud jsou importovaná novější.</div>
+    </div>
+    <div class="import-option" id="opt-overwrite" data-mode="overwrite">
+      <div class="import-option-title">♻️ PŘEPSAT (Overwrite)</div>
+      <div class="import-option-desc">Smaže veškerá lokální data a nahradí importovanými.</div>
+      <div class="import-warning">⚠️ Tato akce je nevratná! Nejprve si exportuj zálohu.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary modal-close" data-modal="modal-import">Zrušit</button>
+      <button class="btn btn-primary" id="btn-import-confirm">Importovat</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Employee Detail -->
+<div class="modal-overlay" id="modal-emp-detail">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="emp-detail-content"></div>
+  </div>
+</div>
+
+<!-- MODAL: Global Search -->
+<div class="modal-overlay" id="modal-global-search">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">🔍 Fulltextové vyhledávání</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-global-search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <input class="form-control" id="global-search-input" placeholder="Hledat všude (min. 2 znaky)…" type="search" autocomplete="off" style="font-size:1.1rem; padding:16px"/>
+    </div>
+    <div id="global-search-results" style="max-height: 50vh; overflow-y:auto; margin-top:16px; padding-bottom:16px"></div>
+  </div>
+</div>
+
+<!-- MODAL: Labels -->
+<div class="modal-overlay" id="modal-labels">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Správa štítků</div>
+      <button class="btn btn-ghost btn-icon modal-close" data-modal="modal-labels">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="labels-list" style="margin-bottom:20px; display:flex; flex-direction:column; gap:8px"></div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title" style="font-size:0.9rem">Nový štítek</div>
+      <form id="form-label" style="display:flex;gap:8px">
+        <input class="form-control" id="label-name" required placeholder="Název…" style="flex:1"/>
+        <input class="form-control" type="color" id="label-color" value="#3b82f6" style="width:50px;padding:4px"/>
+        <button type="submit" class="btn btn-primary">Přidat</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+<script>
+window.onerror = function(msg, url, line, col, error) {
+   alert("Error: " + msg + "\nurl: " + url + "\nline: " + line);
+};
+window.addEventListener("unhandledrejection", function(e) {
+  alert("Promise Rejection: " + e.reason);
+});
+</script>
+<script src="db.js?v=43"></script>
+<script src="app.js?v=43"></script>
+</body>
+</html>
