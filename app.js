@@ -814,6 +814,7 @@ async function showEmployeeDetail(id) {
 // ==========================================
 // 8. Render: Projects & Notes
 // ==========================================
+async function renderProjects() {
   const btnProj = document.getElementById('btn-bulk-delete-project');
   if (btnProj) btnProj.style.display = 'none';
 
