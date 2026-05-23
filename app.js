@@ -240,6 +240,16 @@ window.applyGlobalDateFilter = function() {
   
   renderCurrentView();
 };
+
+currentState.sortOrder = 'desc';
+window.toggleSortOrder = function() {
+  currentState.sortOrder = currentState.sortOrder === 'desc' ? 'asc' : 'desc';
+  const btns = document.querySelectorAll('.btn-sort-toggle');
+  btns.forEach(btn => {
+    btn.innerHTML = currentState.sortOrder === 'desc' ? '⬇ Nejnovější' : '⬆ Nejstarší';
+  });
+  renderCurrentView();
+};
 function getInitials(name) { return name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '?'; }
 function getLabelsHtml(labelIds) {
   if (!labelIds || !labelIds.length) return '';
@@ -403,12 +413,14 @@ async function renderTasks() {
     tasks = tasks.filter(t => t.labelIds && t.labelIds.includes(lblId));
   }
   if (currentState.taskFilter === 'my') {
-    const ownerName = (await getSetting('ownerName') || '').trim().toLowerCase();
-    tasks = tasks.filter(t => {
-      const empIds = t.employeeIds || (t.employeeId ? [t.employeeId] : []);
-      const empNames = empIds.map(id => (currentState.employeesMap[id]?.name || '').trim().toLowerCase());
-      return empNames.some(n => ownerName && n.includes(ownerName));
-    });
+    const myEmpIdStr = await getSetting('myEmployeeId');
+    if (myEmpIdStr) {
+      const myEmpId = parseInt(myEmpIdStr);
+      tasks = tasks.filter(t => {
+        const empIds = t.employeeIds || (t.employeeId ? [t.employeeId] : []);
+        return empIds.includes(myEmpId);
+      });
+    }
   }
 
   document.querySelectorAll('#task-filters .filter-chip').forEach(f => f.classList.toggle('active', f.dataset.f === currentState.taskFilter));
@@ -417,9 +429,9 @@ async function renderTasks() {
     if (a.orderIndex !== undefined && b.orderIndex !== undefined) return a.orderIndex - b.orderIndex;
     if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
     if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
-    const tA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-    const tB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-    return tA - tB;
+    const tA = new Date(a.createdAt || 0).getTime();
+    const tB = new Date(b.createdAt || 0).getTime();
+    return currentState.sortOrder === 'asc' ? tA - tB : tB - tA;
   });
 
   const activeTasks = tasks.filter(t => t.status === 'active');
@@ -445,10 +457,10 @@ function getPriorityBadge(t) {
     if (dl < Date.now()) html += '<span class="badge badge-overdue">⚠️ Zpoždění</span>';
     else if (dl < Date.now() + 48*3600*1000) html += '<span class="badge badge-soon">🟠 Do 48h</span>';
     else if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Běžná</span>';
+    else html += '<span class="badge badge-low">🟢 Průběžná</span>';
   } else {
     if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Běžná</span>';
+    else html += '<span class="badge badge-low">🟢 Průběžná</span>';
   }
   return html;
 }
@@ -669,7 +681,10 @@ async function renderEmployees() {
   if (emps.length === 0) {
     DOM.empList.innerHTML = `<div class="empty-state"><p>Nenalezeny záznamy.</p></div>`;
   } else {
-    let html = paginatedEmps.map(e => `
+    let html = `<div style="margin-bottom:12px; display:flex; align-items:center; padding: 0 16px;">
+        <input type="checkbox" id="bulk-select-all-employee" style="width:18px; height:18px; margin-right:12px; cursor:pointer;" onclick="toggleBulkSelectAll('employee', this.checked)">
+        <label for="bulk-select-all-employee" style="font-size:0.9rem; font-weight:600; cursor:pointer;">Vybrat vše na stránce</label>
+      </div>` + paginatedEmps.map(e => `
       <div class="card employee-row" onclick="showEmployeeDetail(${e.id})" style="cursor:pointer; opacity: ${e.isActive===false?0.6:1}; padding: 16px; margin-bottom:12px; display:flex; align-items:center;">
         <input type="checkbox" class="bulk-select-checkbox" data-id="${e.id}" data-type="employee" onclick="event.stopPropagation(); onBulkSelectChange('employee');" style="width:18px; height:18px; margin-right:12px; cursor:pointer;" />
         <div class="employee-avatar">${e.photo ? `<img src="${e.photo}">` : getInitials(e.name)}</div>
@@ -775,7 +790,7 @@ async function showEmployeeDetail(id) {
   const emp = await getEmployee(id);
   if(!emp) return;
   const tasks = await getTasksByEmployee(id);
-  const active = tasks.filter(t => t.status === 'active');
+  const active = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
   
   const tasksHtml = active.length > 0 ? active.map(t => createTaskCard(t)).join('') : '<div class="empty-state" style="padding:20px"><p>Žádné aktivní úkoly.</p></div>';
@@ -796,6 +811,10 @@ async function showEmployeeDetail(id) {
         <div class="detail-sub">${emp.position || ''} ${emp.department ? '• '+emp.department : ''}</div>
         ${labelsHtml ? `<div class="detail-sub" style="margin-top:6px">${labelsHtml}</div>` : ''}
         ${projs ? `<div class="detail-sub" style="margin-top:6px">📁 Projekty: ${projs}</div>` : ''}
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <span class="badge badge-active">Aktivních úkolů: ${active.length}</span>
+          <span class="badge badge-done">Hotových: ${done.length}</span>
+        </div>
       </div>
     </div>
     <div style="display:flex;gap:16px;margin-bottom:24px">
@@ -909,6 +928,11 @@ async function renderProjects() {
     if (currentState.globalFilterYear || currentState.globalFilterMonth) {
       filteredProjs = filteredProjs.filter(itemMatchesGlobalDateFilter);
     }
+    
+    filteredProjs.sort((a, b) => {
+      const diff = b.createdAt - a.createdAt;
+      return currentState.sortOrder === 'asc' ? -diff : diff;
+    });
 
     if (filteredProjs.length === 0) listContainer.innerHTML = `<div class="empty-state"><p>Zatím žádné projekty.</p></div>`;
     else {
@@ -916,7 +940,11 @@ async function renderProjects() {
       const allEmps = await getAllEmployees();
       const h48 = Date.now() + 48*60*60*1000;
       
-      listContainer.innerHTML = filteredProjs.map(p => {
+      let html = `<div style="margin-bottom:12px; display:flex; align-items:center;">
+        <input type="checkbox" id="bulk-select-all-project" style="width:18px; height:18px; margin-right:12px; cursor:pointer;" onclick="toggleBulkSelectAll('project', this.checked)">
+        <label for="bulk-select-all-project" style="font-size:0.9rem; font-weight:600; cursor:pointer;">Vybrat všechny zobrazené projekty</label>
+      </div>`;
+      listContainer.innerHTML = html + filteredProjs.map(p => {
         const pTasks = allTasks.filter(t => t.projectId === p.id);
         const total = pTasks.length;
         const done = pTasks.filter(t => t.status === 'done').length;
@@ -1041,11 +1069,17 @@ async function renderNotes() {
     if (a.orderIndex !== undefined && b.orderIndex !== undefined) return a.orderIndex - b.orderIndex;
     const tA = new Date(a.createdAt || a.updatedAt).getTime();
     const tB = new Date(b.createdAt || b.updatedAt).getTime();
-    return tB - tA; // Sort by newest first if no manual order
+    return currentState.sortOrder === 'asc' ? tA - tB : tB - tA;
   });
 
   if (notes.length === 0) DOM.notesList.innerHTML = `<div class="empty-state"><p>Vytvořte první zápis z porady.</p></div>`;
-  else DOM.notesList.innerHTML = notes.map(n => createNoteCard(n)).join('');
+  else {
+    let html = `<div style="margin-bottom:12px; display:flex; align-items:center;">
+      <input type="checkbox" id="bulk-select-all-note" style="width:18px; height:18px; margin-right:12px; cursor:pointer;" onclick="toggleBulkSelectAll('note', this.checked)">
+      <label for="bulk-select-all-note" style="font-size:0.9rem; font-weight:600; cursor:pointer;">Vybrat všechny zobrazené zápisy</label>
+    </div>`;
+    DOM.notesList.innerHTML = html + notes.map(n => createNoteCard(n)).join('');
+  }
 }
 
 function createNoteCard(n) {
@@ -1689,6 +1723,7 @@ async function extractAndCreateTasksFromNote(noteId) {
   const taskKeywords = ['úkol:', 'ukol:', 'task:'];
   const personKeywords = ['zodpovědná osoba:', 'zodpovedna osoba:', 'osoba:', 'kdo:', 'zodpovídá:'];
   const dateKeywords = ['termín splnění:', 'termin splneni:', 'termín:', 'termin:', 'do:', 'deadline:'];
+  const labelKeywords = ['štítek:', 'štítky:', 'stitky:', 'stitek:', 'tag:'];
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -1736,6 +1771,16 @@ async function extractAndCreateTasksFromNote(noteId) {
           break;
         }
       }
+      
+      let matchedLabel = false;
+      for (const kw of labelKeywords) {
+        if (strippedLower.startsWith(kw)) {
+          currentTask.labelsStr = actualText.substring(kw.length).trim();
+          matchedLabel = true;
+          break;
+        }
+      }
+      if (matchedLabel) continue;
     }
   }
   
@@ -1765,12 +1810,23 @@ async function extractAndCreateTasksFromNote(noteId) {
       }
     }
     
+    let labelIds = [];
+    if (t.labelsStr) {
+      const allLabels = await getAllLabels();
+      const tokens = t.labelsStr.split(/[,\s]+/).map(x => x.replace(/^#/, '').trim().toLowerCase()).filter(Boolean);
+      tokens.forEach(tok => {
+        const found = allLabels.find(l => l.name.toLowerCase() === tok || l.name.toLowerCase().includes(tok) || tok.includes(l.name.toLowerCase()));
+        if (found && !labelIds.includes(found.id)) labelIds.push(found.id);
+      });
+    }
+
     await addTask({
       title: t.title,
       description: `Generováno ze zápisu: ${note.title}\nZodpovědná osoba: ${t.personName || 'Neurčeno'}\nTermín: ${t.deadlineStr || 'Neurčeno'}`,
       projectId: t.projectId,
       employeeId: empId,
       deadline: parsedDate,
+      labelIds: labelIds,
       status: 'active',
       priority: 'medium'
     });
@@ -1789,7 +1845,13 @@ async function extractAndCreateTasksFromNote(noteId) {
 // Settings & Sync
 document.getElementById('btn-settings').addEventListener('click', async () => {
   document.getElementById('set-app-name').value = await getSetting('appName') || 'ToDoM';
-  document.getElementById('set-owner-name').value = await getSetting('ownerName') || '';
+  const myEmpId = await getSetting('myEmployeeId');
+  const allEmps = await getAllEmployees();
+  const selectMyEmp = document.getElementById('set-my-employee');
+  if (selectMyEmp) {
+    selectMyEmp.innerHTML = '<option value="">— Nevybráno —</option>' + allEmps.sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    if (myEmpId) selectMyEmp.value = myEmpId;
+  }
   const lEx = await getSetting('lastExport');
   const lIm = await getSetting('lastImport');
   DOM.lastExportInfo.textContent = lEx ? `Export: ${new Date(lEx).toLocaleString('cs-CZ')}` : 'Nikdy neexportováno';
@@ -1809,9 +1871,11 @@ document.getElementById('btn-settings').addEventListener('click', async () => {
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
   const name = document.getElementById('set-app-name').value || 'ToDoM';
   await setSetting('appName', name);
-  await setSetting('ownerName', document.getElementById('set-owner-name').value);
+  const selectMyEmp = document.getElementById('set-my-employee');
+  if (selectMyEmp) await setSetting('myEmployeeId', selectMyEmp.value);
   DOM.headerTitle.textContent = name; document.title = name;
   closeModal('modal-settings'); showToast('Nastavení uloženo', 'success');
+  renderCurrentView();
 });
 
 // Labels Management
@@ -2168,7 +2232,12 @@ function setupEventListeners() {
 
   // Clear Context logic is handled earlier
   DOM.btnExport.addEventListener('click', async () => {
-    try { await exportAllData(); showToast('Záloha stažena', 'success'); renderSyncInfo(); } 
+    try { 
+      await exportAllData(); 
+      showToast('Záloha stažena', 'success'); 
+      const lEx = await getSetting('lastExport');
+      DOM.lastExportInfo.textContent = lEx ? `Export: ${new Date(lEx).toLocaleString('cs-CZ')}` : '';
+    }
     catch(err) { showToast('Chyba při exportu', 'error'); }
   });
   DOM.btnImportTrigger.addEventListener('click', () => DOM.importFileInput.click());
@@ -2199,6 +2268,12 @@ function setupEventListeners() {
       currentState.importPayload = null; await populateGlobalEmployeeFilter(); renderCurrentView();
     } catch(err) { showToast('Chyba při importu', 'error'); }
   });
+
+  window.toggleBulkSelectAll = function(type, checked) {
+    const checkboxes = document.querySelectorAll(`.bulk-select-checkbox[data-type="${type}"]`);
+    checkboxes.forEach(cb => { cb.checked = checked; });
+    onBulkSelectChange(type);
+  };
 
   window.onBulkSelectChange = function(type) {
     const checkboxes = document.querySelectorAll(`.bulk-select-checkbox[data-type="${type}"]:checked`);

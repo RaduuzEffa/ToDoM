@@ -135,7 +135,7 @@ async function getAllTasks() {
   return db.tasks.toArray();
 }
 async function getActiveTasks() {
-  return db.tasks.filter(t => t.status === 'active').toArray();
+  return db.tasks.filter(t => t.status !== 'done').toArray();
 }
 
 async function getTasksByEmployee(employeeId) {
