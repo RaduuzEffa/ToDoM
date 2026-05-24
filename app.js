@@ -264,7 +264,11 @@ function getLabelsHtml(labelIds) {
 // 5. Render: Dashboard
 // ==========================================
 async function updateGlobalState() {
-  const counts = await getSemaforCounts();
+  const counts = await getSemaforCounts(
+    currentState.activeProjectId,
+    currentState.globalFilterYear,
+    currentState.globalFilterMonth
+  );
   DOM.countUrgent.textContent = counts.urgent;
   DOM.countSoon.textContent = counts.soon;
   DOM.countNormal.textContent = counts.normal;
@@ -341,7 +345,7 @@ async function renderDashboardProjectSummary(allTasks) {
       const done = pTasks.filter(t => t.status === 'done').length;
       const active = pTasks.filter(t => t.status !== 'done');
       const urgent = active.filter(t => t.priority === 'urgent').length;
-      const soon = active.filter(t => t.deadline && new Date(t.deadline).getTime() <= h48 && t.priority !== 'urgent').length;
+      const soon = active.filter(t => t.priority !== 'urgent' && (t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48))).length;
       
       return `
         <div class="card" style="padding:16px; margin-bottom:14px; cursor:pointer; background: #ffffff; border:none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); transition: all 0.2s ease; ${currentState.activeProjectId === p.id ? 'box-shadow: 0 0 0 2px var(--accent);' : ''}" onclick="setProjectContext(${p.id})" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='none'; this.style.boxShadow='${currentState.activeProjectId === p.id ? '0 0 0 2px var(--accent)' : '0 4px 12px rgba(0,0,0,0.03)'}'">
@@ -405,8 +409,8 @@ async function renderTasks() {
   
   const h48 = Date.now() + 48*60*60*1000;
   if (currentState.taskFilter === 'urgent') tasks = tasks.filter(t => t.priority === 'urgent');
-  if (currentState.taskFilter === 'soon') tasks = tasks.filter(t => t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48 && t.priority !== 'urgent'));
-  if (currentState.taskFilter === 'low') tasks = tasks.filter(t => t.priority === 'low');
+  if (currentState.taskFilter === 'soon') tasks = tasks.filter(t => t.priority !== 'urgent' && (t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48)));
+  if (currentState.taskFilter === 'low') tasks = tasks.filter(t => t.priority === 'low' && (!t.deadline || new Date(t.deadline).getTime() > h48));
   
   if (currentState.taskFilterLabelId) {
     const lblId = parseInt(currentState.taskFilterLabelId);
@@ -762,7 +766,7 @@ async function renderEmployeesSidebar() {
         const done = pTasks.filter(t => t.status === 'done').length;
         const active = pTasks.filter(t => t.status !== 'done');
         const urgent = active.filter(t => t.priority === 'urgent').length;
-        const soon = active.filter(t => t.deadline && new Date(t.deadline).getTime() <= h48 && t.priority !== 'urgent').length;
+        const soon = active.filter(t => t.priority !== 'urgent' && (t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48))).length;
         
         return `
           <div class="card" style="padding:16px; margin-bottom:14px; cursor:pointer; background: #ffffff; border:none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); transition: all 0.2s ease; ${currentState.activeProjectId === p.id ? 'box-shadow: 0 0 0 2px var(--accent);' : ''}" onclick="setProjectContext(${p.id}); renderCurrentView();" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='none'; this.style.boxShadow='${currentState.activeProjectId === p.id ? '0 0 0 2px var(--accent)' : '0 4px 12px rgba(0,0,0,0.03)'}'">
@@ -1007,7 +1011,7 @@ async function renderNotes() {
         const done = pTasks.filter(t => t.status === 'done').length;
         const active = pTasks.filter(t => t.status !== 'done');
         const urgent = active.filter(t => t.priority === 'urgent').length;
-        const soon = active.filter(t => t.deadline && new Date(t.deadline).getTime() <= h48 && t.priority !== 'urgent').length;
+        const soon = active.filter(t => t.priority !== 'urgent' && (t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48))).length;
         
         return `
           <div class="card" style="padding:16px; margin-bottom:14px; cursor:pointer; background: #ffffff; border:none; box-shadow: 0 4px 12px rgba(0,0,0,0.03); transition: all 0.2s ease; ${currentState.activeProjectId === p.id ? 'box-shadow: 0 0 0 2px var(--accent);' : ''}" onclick="setProjectContext(${p.id}); renderCurrentView();" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='none'; this.style.boxShadow='${currentState.activeProjectId === p.id ? '0 0 0 2px var(--accent)' : '0 4px 12px rgba(0,0,0,0.03)'}'">
@@ -2398,32 +2402,57 @@ function setupEventListeners() {
 function initSortable() {
   if (typeof Sortable === 'undefined') return;
   const ka = document.getElementById('kanban-active'), kp = document.getElementById('kanban-in-progress'), kd = document.getElementById('kanban-done');
+  
+  const commonOptions = {
+    group: 'tasks',
+    animation: 150,
+    draggable: '.card',
+    fallbackOnBody: true,
+    swapThreshold: 0.65,
+    onEnd: handleTaskDrop,
+    delay: 150,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5
+  };
+
   if (ka && kp && kd) {
-    new Sortable(ka, { group: 'tasks', animation: 150, draggable: '.card', fallbackOnBody: true, onEnd: handleTaskDrop });
-    new Sortable(kp, { group: 'tasks', animation: 150, draggable: '.card', fallbackOnBody: true, onEnd: handleTaskDrop });
-    new Sortable(kd, { group: 'tasks', animation: 150, draggable: '.card', fallbackOnBody: true, onEnd: handleTaskDrop });
+    new Sortable(ka, commonOptions);
+    new Sortable(kp, commonOptions);
+    new Sortable(kd, commonOptions);
   }
   const empList = document.getElementById('employees-list');
-  if (empList) new Sortable(empList, { animation: 150, onEnd: async () => {
-    if (currentState.searchEmp || currentState.empFilter !== 'all') return;
-    const items = empList.querySelectorAll('.card');
-    for (let i=0; i<items.length; i++) {
-      const m = items[i].getAttribute('onclick').match(/showEmployeeDetail\((\d+)\)/);
-      if (m) await updateEmployee(parseInt(m[1]), { orderIndex: i });
+  if (empList) new Sortable(empList, {
+    animation: 150,
+    delay: 150,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    onEnd: async () => {
+      if (currentState.searchEmp || currentState.empFilter !== 'all') return;
+      const items = empList.querySelectorAll('.card');
+      for (let i=0; i<items.length; i++) {
+        const m = items[i].getAttribute('onclick').match(/showEmployeeDetail\((\d+)\)/);
+        if (m) await updateEmployee(parseInt(m[1]), { orderIndex: i });
+      }
     }
-  }});
+  });
   const notesList = document.getElementById('notes-list');
-  if (notesList) new Sortable(notesList, { animation: 150, onEnd: async () => {
-    const monthFilter = document.getElementById('note-filter-month');
-    if (currentState.searchNote || (monthFilter && monthFilter.value)) return;
-    const items = notesList.querySelectorAll('.card');
-    for (let i=0; i<items.length; i++) {
-      const onclickAttr = items[i].getAttribute('onclick');
-      if (!onclickAttr) continue;
-      const m = onclickAttr.match(/viewNote\((\d+)\)/);
-      if (m) await updateNote(parseInt(m[1]), { orderIndex: i });
+  if (notesList) new Sortable(notesList, {
+    animation: 150,
+    delay: 150,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    onEnd: async () => {
+      const monthFilter = document.getElementById('note-filter-month');
+      if (currentState.searchNote || (monthFilter && monthFilter.value)) return;
+      const items = notesList.querySelectorAll('.card');
+      for (let i=0; i<items.length; i++) {
+        const onclickAttr = items[i].getAttribute('onclick');
+        if (!onclickAttr) continue;
+        const m = onclickAttr.match(/viewNote\((\d+)\)/);
+        if (m) await updateNote(parseInt(m[1]), { orderIndex: i });
+      }
     }
-  }});
+  });
 }
 
 async function handleTaskDrop(evt) {

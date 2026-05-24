@@ -104,7 +104,7 @@ body {
 /* ── Top Header ── */
 .top-header {
   position: sticky; top: 0; z-index: 50;
-  padding: 16px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -573,7 +573,7 @@ textarea.form-control { resize: vertical; min-height: 100px; line-height: 1.5; }
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 16px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -649,7 +649,7 @@ textarea.form-control { resize: vertical; min-height: 100px; line-height: 1.5; }
   .top-header {
     grid-template-columns: 1fr auto !important;
     row-gap: 8px !important;
-    padding: 10px 16px !important;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px !important;
     align-items: center !important;
   }
   .header-left-group {

@@ -171,17 +171,43 @@ async function deleteTask(id) {
 }
 
 // ── Semafor calculation ────────────────────────────────────
-async function getSemaforCounts() {
+async function getSemaforCounts(projectId = null, year = '', month = '') {
   const now = Date.now();
   const h48 = now + 48 * 60 * 60 * 1000;
-  const active = await getActiveTasks();
+  let active = await getActiveTasks();
+
+  if (projectId) {
+    active = active.filter(t => t.projectId === projectId);
+  }
+  if (year || month) {
+    active = active.filter(t => {
+      let dateToTest = null;
+      if (t.deadline) {
+        dateToTest = new Date(t.deadline);
+      } else if (t.createdAt) {
+        dateToTest = new Date(t.createdAt);
+      } else if (t.updatedAt) {
+        dateToTest = new Date(t.updatedAt);
+      }
+      if (!dateToTest || isNaN(dateToTest.getTime())) return false;
+      if (year && dateToTest.getFullYear().toString() !== year) return false;
+      if (month) {
+        const mStr = (dateToTest.getMonth() + 1).toString().padStart(2, '0');
+        if (mStr !== month) return false;
+      }
+      return true;
+    });
+  }
 
   let urgent = 0, soon = 0, normal = 0;
   for (const t of active) {
-    if (t.priority === 'urgent') { urgent++; continue; }
-    const dl = t.deadline ? new Date(t.deadline).getTime() : null;
-    if (dl && dl <= h48) { soon++; }
-    else { normal++; }
+    if (t.priority === 'urgent') {
+      urgent++;
+    } else if (t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= h48)) {
+      soon++;
+    } else {
+      normal++;
+    }
   }
   return { urgent, soon, normal, total: active.length };
 }
