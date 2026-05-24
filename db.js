@@ -2,6 +2,84 @@
 // db.js – Dexie.js IndexedDB Schema & All Database Operations
 // ============================================================
 
+// ── Firebase Initialization ───────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSy...", 
+  authDomain: "todom-4e20d.firebaseapp.com",
+  projectId: "todom-4e20d",
+  storageBucket: "todom-4e20d.appspot.com",
+  messagingSenderId: "966053138399",
+  appId: "1:966053138399:web:99c9fb7d98b21066fe7e6a"
+};
+
+firebase.initializeApp(firebaseConfig);
+const firestore = firebase.firestore();
+
+// Enable offline persistence
+firestore.enablePersistence({ synchronizeTabs: true })
+  .catch((err) => {
+    console.error("Firebase persistence failed:", err.code);
+  });
+
+// Helper functions for Firestore syncing
+function cleanData(data) {
+  const cleaned = {};
+  for (const key in data) {
+    if (data[key] !== undefined) {
+      cleaned[key] = data[key];
+    }
+  }
+  return cleaned;
+}
+
+async function syncToFirestore(collection, id, data) {
+  try {
+    await firestore.collection(collection).doc(id.toString()).set(cleanData(data));
+  } catch (e) {
+    console.error(`Error syncing to Firestore (${collection}:${id}):`, e);
+  }
+}
+
+async function deleteFromFirestore(collection, id) {
+  try {
+    await firestore.collection(collection).doc(id.toString()).delete();
+  } catch (e) {
+    console.error(`Error deleting from Firestore (${collection}:${id}):`, e);
+  }
+}
+
+async function clearFirestoreCollections() {
+  const collections = ['employees', 'tasks', 'notes', 'projects', 'teams', 'labels'];
+  for (const col of collections) {
+    try {
+      const snap = await firestore.collection(col).get();
+      const batch = firestore.batch();
+      let count = 0;
+      snap.forEach(doc => {
+        batch.delete(doc.ref);
+        count++;
+      });
+      if (count > 0) {
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error(`Error clearing Firestore collection ${col}:`, e);
+    }
+  }
+}
+
+async function uploadAllToFirestore(payload) {
+  const collections = ['employees', 'tasks', 'notes', 'projects', 'teams', 'labels'];
+  for (const col of collections) {
+    const list = payload[col] || [];
+    for (const doc of list) {
+      if (doc && doc.id) {
+        await syncToFirestore(col, doc.id, doc);
+      }
+    }
+  }
+}
+
 const APP_VERSION = '1.0.0';
 
 const db = new Dexie('ToDoM');
@@ -68,42 +146,79 @@ async function getEmployee(id) {
 
 async function addEmployee(data) {
   const now = new Date().toISOString();
-  return db.employees.add({ ...data, isActive: true, createdAt: now, updatedAt: now });
+  const insertData = { ...data, isActive: true, createdAt: now, updatedAt: now };
+  const id = await db.employees.add(insertData);
+  await syncToFirestore('employees', id, { ...insertData, id });
+  return id;
 }
 
 async function updateEmployee(id, data) {
   const now = new Date().toISOString();
-  return db.employees.update(id, { ...data, updatedAt: now });
+  const updateData = { ...data, updatedAt: now };
+  await db.employees.update(id, updateData);
+  const fullRecord = await db.employees.get(id);
+  await syncToFirestore('employees', id, fullRecord);
 }
 
 async function deleteEmployee(id) {
+  const tasksToUpdate = [];
   await db.transaction('rw', db.employees, db.tasks, async () => {
     await db.employees.delete(id);
-    // Unassign tasks from deleted employee
     const tasks = await db.tasks.where('employeeId').equals(id).toArray();
     for (const t of tasks) {
       await db.tasks.update(t.id, { employeeId: null, updatedAt: new Date().toISOString() });
+      tasksToUpdate.push(t.id);
     }
   });
+
+  await deleteFromFirestore('employees', id);
+  for (const taskId of tasksToUpdate) {
+    const fullTask = await db.tasks.get(taskId);
+    if (fullTask) {
+      await syncToFirestore('tasks', taskId, fullTask);
+    }
+  }
 }
 
 // ── Labels ────────────────────────────────────────────────
 async function getAllLabels() { return db.labels.toArray(); }
 async function getLabel(id) { return db.labels.get(id); }
-async function addLabel(data) { return db.labels.add({ ...data, createdAt: new Date().toISOString() }); }
-async function updateLabel(id, data) { return db.labels.update(id, data); }
+async function addLabel(data) {
+  const insertData = { ...data, createdAt: new Date().toISOString() };
+  const id = await db.labels.add(insertData);
+  await syncToFirestore('labels', id, { ...insertData, id });
+  return id;
+}
+async function updateLabel(id, data) {
+  await db.labels.update(id, data);
+  const fullRecord = await db.labels.get(id);
+  await syncToFirestore('labels', id, fullRecord);
+}
 async function deleteLabel(id) {
-  return db.labels.delete(id);
+  await db.labels.delete(id);
+  await deleteFromFirestore('labels', id);
 }
 
 // ── Teams ─────────────────────────────────────────────────
 async function getAllTeams() { return await db.teams.orderBy('createdAt').reverse().toArray(); }
 async function getTeam(id) { return await db.teams.get(parseInt(id)); }
 async function saveTeam(t) {
-  if (t.id) { await db.teams.put(t); return t.id; }
-  else { t.createdAt = new Date().toISOString(); return await db.teams.add(t); }
+  if (t.id) {
+    await db.teams.put(t);
+    await syncToFirestore('teams', t.id, t);
+    return t.id;
+  } else {
+    t.createdAt = new Date().toISOString();
+    const id = await db.teams.add(t);
+    t.id = id;
+    await syncToFirestore('teams', id, t);
+    return id;
+  }
 }
-async function deleteTeam(id) { await db.teams.delete(parseInt(id)); }
+async function deleteTeam(id) {
+  await db.teams.delete(parseInt(id));
+  await deleteFromFirestore('teams', id);
+}
 
 // ── Projects ──────────────────────────────────────────────
 async function getAllProjects() {
@@ -114,20 +229,36 @@ async function getProject(id) {
 }
 async function addProject(data) {
   const now = new Date().toISOString();
-  return db.projects.add({ ...data, createdAt: now, updatedAt: now });
+  const insertData = { ...data, createdAt: now, updatedAt: now };
+  const id = await db.projects.add(insertData);
+  await syncToFirestore('projects', id, { ...insertData, id });
+  return id;
 }
 async function updateProject(id, data) {
   const now = new Date().toISOString();
-  return db.projects.update(id, { ...data, updatedAt: now });
+  const updateData = { ...data, updatedAt: now };
+  await db.projects.update(id, updateData);
+  const fullRecord = await db.projects.get(id);
+  await syncToFirestore('projects', id, fullRecord);
 }
 async function deleteProject(id) {
+  const tasksToUpdate = [];
   await db.transaction('rw', db.projects, db.tasks, async () => {
     await db.projects.delete(id);
     const tasks = await db.tasks.filter(t => t.projectId === id).toArray();
     for (const t of tasks) {
       await db.tasks.update(t.id, { projectId: null, updatedAt: new Date().toISOString() });
+      tasksToUpdate.push(t.id);
     }
   });
+
+  await deleteFromFirestore('projects', id);
+  for (const taskId of tasksToUpdate) {
+    const fullTask = await db.tasks.get(taskId);
+    if (fullTask) {
+      await syncToFirestore('tasks', taskId, fullTask);
+    }
+  }
 }
 
 // ── Tasks ─────────────────────────────────────────────────
@@ -148,14 +279,17 @@ async function getTask(id) {
 
 async function addTask(data) {
   const now = new Date().toISOString();
-  return db.tasks.add({
+  const insertData = {
     ...data,
     status: data.status || 'active',
     priority: data.priority || 'medium',
     createdAt: now,
     updatedAt: now,
     completedAt: null
-  });
+  };
+  const id = await db.tasks.add(insertData);
+  await syncToFirestore('tasks', id, { ...insertData, id });
+  return id;
 }
 
 async function updateTask(id, data) {
@@ -163,11 +297,14 @@ async function updateTask(id, data) {
   const update = { ...data, updatedAt: now };
   if (data.status === 'done' && !data.completedAt) update.completedAt = now;
   if (data.status === 'active') update.completedAt = null;
-  return db.tasks.update(id, update);
+  await db.tasks.update(id, update);
+  const fullRecord = await db.tasks.get(id);
+  await syncToFirestore('tasks', id, fullRecord);
 }
 
 async function deleteTask(id) {
-  return db.tasks.delete(id);
+  await db.tasks.delete(id);
+  await deleteFromFirestore('tasks', id);
 }
 
 // ── Semafor calculation ────────────────────────────────────
@@ -224,16 +361,23 @@ async function getNote(id) {
 
 async function addNote(data) {
   const now = new Date().toISOString();
-  return db.notes.add({ ...data, createdAt: now, updatedAt: now });
+  const insertData = { ...data, createdAt: now, updatedAt: now };
+  const id = await db.notes.add(insertData);
+  await syncToFirestore('notes', id, { ...insertData, id });
+  return id;
 }
 
 async function updateNote(id, data) {
   const now = new Date().toISOString();
-  return db.notes.update(id, { ...data, updatedAt: now });
+  const updateData = { ...data, updatedAt: now };
+  await db.notes.update(id, updateData);
+  const fullRecord = await db.notes.get(id);
+  await syncToFirestore('notes', id, fullRecord);
 }
 
 async function deleteNote(id) {
-  return db.notes.delete(id);
+  await db.notes.delete(id);
+  await deleteFromFirestore('notes', id);
 }
 
 // ── Export / Import ───────────────────────────────────────
@@ -298,6 +442,9 @@ function validateImportPayload(payload) {
 }
 
 async function importOverwrite(payload) {
+  // Clear Firestore first
+  await clearFirestoreCollections();
+
   await db.transaction('rw', db.employees, db.tasks, db.notes, db.settings, db.projects, db.labels, db.teams, async () => {
     await Promise.all([
       db.employees.clear(),
@@ -318,21 +465,29 @@ async function importOverwrite(payload) {
     if (payload.teams) await db.teams.bulkAdd(payload.teams);
     await db.settings.put({ key: 'lastImport', value: now });
   });
+
+  // Upload to Firestore after local transaction completes
+  await uploadAllToFirestore(payload);
 }
 
 async function importMerge(payload) {
+  const updatedRecords = {};
+  
   await db.transaction('rw', db.employees, db.tasks, db.notes, db.settings, db.projects, db.labels, db.teams, async () => {
     for (const table of ['employees', 'tasks', 'notes', 'projects', 'labels', 'teams']) {
       const incoming = payload[table] || [];
+      updatedRecords[table] = [];
       for (const record of incoming) {
         const existing = await db[table].get(record.id);
         if (!existing) {
           await db[table].add(record);
+          updatedRecords[table].push(record);
         } else {
           const existTs = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
           const incTs   = new Date(record.updatedAt   || record.createdAt   || 0).getTime();
           if (incTs > existTs) {
             await db[table].put(record);
+            updatedRecords[table].push(record);
           }
         }
       }
@@ -343,4 +498,56 @@ async function importMerge(payload) {
     }
     await db.settings.put({ key: 'lastImport', value: new Date().toISOString() });
   });
+
+  // Sync to Firestore after transaction completes
+  for (const table of ['employees', 'tasks', 'notes', 'projects', 'labels', 'teams']) {
+    for (const record of updatedRecords[table]) {
+      await syncToFirestore(table, record.id, record);
+    }
+  }
 }
+
+// ── Setup Firestore real-time listeners ───────────────────
+function setupFirestoreListeners() {
+  const collections = ['employees', 'tasks', 'notes', 'projects', 'teams', 'labels'];
+  
+  collections.forEach(col => {
+    firestore.collection(col).onSnapshot(async (snapshot) => {
+      let hasChanges = false;
+      
+      for (const change of snapshot.docChanges()) {
+        // Ignore changes that were made locally
+        if (change.doc.metadata.hasPendingWrites) continue;
+        
+        const docId = parseInt(change.doc.id);
+        if (isNaN(docId)) continue;
+        
+        if (change.type === 'removed') {
+          const local = await db[col].get(docId);
+          if (local) {
+            await db[col].delete(docId);
+            hasChanges = true;
+          }
+        } else {
+          const docData = change.doc.data();
+          docData.id = docId;
+          const local = await db[col].get(docId);
+          if (!local || JSON.stringify(local) !== JSON.stringify(docData)) {
+            await db[col].put(docData);
+            hasChanges = true;
+          }
+        }
+      }
+      
+      if (hasChanges) {
+        if (typeof window.renderCurrentView === 'function') {
+          window.renderCurrentView();
+        }
+      }
+    }, (error) => {
+      console.error(`Firestore snapshot error for ${col}:`, error);
+    });
+  });
+}
+
+setupFirestoreListeners();
