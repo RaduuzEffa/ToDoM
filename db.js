@@ -14,6 +14,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const firestore = firebase.firestore();
+const messaging = ('Notification' in window && firebase.messaging.isSupported()) ? firebase.messaging() : null;
 
 // Enable offline persistence
 firestore.enablePersistence({ synchronizeTabs: true })
@@ -77,6 +78,45 @@ async function uploadAllToFirestore(payload) {
         await syncToFirestore(col, doc.id, doc);
       }
     }
+  }
+}
+
+// ── Notification & Badging Helpers ────────────────────────
+function showLocalNotification(title, options) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification(title, {
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        ...options
+      });
+    });
+  }
+}
+
+async function updateAppBadge() {
+  if ('setAppBadge' in navigator) {
+    try {
+      const counts = await getSemaforCounts();
+      const total = counts.urgent + counts.soon;
+      if (total > 0) {
+        await navigator.setAppBadge(total);
+      } else {
+        await navigator.clearAppBadge();
+      }
+    } catch (e) {
+      console.error("Failed to update app badge:", e);
+    }
+  }
+}
+
+function checkAndTriggerLocalTaskNotification(t) {
+  const isUrgent = t.priority === 'urgent';
+  const isSoon = t.priority === 'medium' || (t.deadline && new Date(t.deadline).getTime() <= Date.now() + 48*3600*1000);
+  if (t.status !== 'done' && (isUrgent || isSoon)) {
+    showLocalNotification(`Úkol: ${t.title}`, {
+      body: `Nastaven status: ${t.priority === 'urgent' ? '🔴 Urgentní' : '🟠 Do 48h'}.`,
+    });
   }
 }
 
@@ -289,6 +329,8 @@ async function addTask(data) {
   };
   const id = await db.tasks.add(insertData);
   await syncToFirestore('tasks', id, { ...insertData, id });
+  checkAndTriggerLocalTaskNotification(insertData);
+  await updateAppBadge();
   return id;
 }
 
@@ -300,11 +342,14 @@ async function updateTask(id, data) {
   await db.tasks.update(id, update);
   const fullRecord = await db.tasks.get(id);
   await syncToFirestore('tasks', id, fullRecord);
+  checkAndTriggerLocalTaskNotification(fullRecord);
+  await updateAppBadge();
 }
 
 async function deleteTask(id) {
   await db.tasks.delete(id);
   await deleteFromFirestore('tasks', id);
+  await updateAppBadge();
 }
 
 // ── Semafor calculation ────────────────────────────────────
@@ -437,7 +482,7 @@ function validateImportPayload(payload) {
   }
   if (!Array.isArray(payload.employees)) throw new Error('"employees" musí být pole.');
   if (!Array.isArray(payload.tasks))     throw new Error('"tasks" musí být pole.');
-  if (!Array.isArray(payload.notes))     throw new Error('"notes" musí být pole.');
+  if (!Array.isArray(payload.notes))     throw new Error('"notes" must be an array.');
   return true;
 }
 
@@ -468,6 +513,7 @@ async function importOverwrite(payload) {
 
   // Upload to Firestore after local transaction completes
   await uploadAllToFirestore(payload);
+  await updateAppBadge();
 }
 
 async function importMerge(payload) {
@@ -505,6 +551,7 @@ async function importMerge(payload) {
       await syncToFirestore(table, record.id, record);
     }
   }
+  await updateAppBadge();
 }
 
 // ── Setup Firestore real-time listeners ───────────────────
@@ -531,6 +578,21 @@ function setupFirestoreListeners() {
         } else {
           const docData = change.doc.data();
           docData.id = docId;
+          
+          if (col === 'tasks') {
+            const isUrgent = docData.priority === 'urgent';
+            const isSoon = docData.priority === 'medium' || (docData.deadline && new Date(docData.deadline).getTime() <= Date.now() + 48*3600*1000);
+            if (docData.status !== 'done' && (isUrgent || isSoon)) {
+              // Trigger notification only if the task has become urgent/soon compared to local
+              const localTask = await db.tasks.get(docId);
+              if (!localTask || localTask.priority !== docData.priority || localTask.status !== docData.status || localTask.deadline !== docData.deadline) {
+                showLocalNotification(`Nový/Upravený urgentní úkol`, {
+                  body: `${docData.title}\nPriorita: ${docData.priority === 'urgent' ? '🔴 Urgentní' : '🟠 Do 48h'}`
+                });
+              }
+            }
+          }
+          
           const local = await db[col].get(docId);
           if (!local || JSON.stringify(local) !== JSON.stringify(docData)) {
             await db[col].put(docData);
@@ -540,6 +602,7 @@ function setupFirestoreListeners() {
       }
       
       if (hasChanges) {
+        await updateAppBadge();
         if (typeof window.renderCurrentView === 'function') {
           window.renderCurrentView();
         }

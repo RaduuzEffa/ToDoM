@@ -147,6 +147,32 @@ async function initApp() {
     
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      
+      if ('Notification' in window && typeof messaging !== 'undefined' && messaging) {
+        Notification.requestPermission().then(async (permission) => {
+          if (permission === 'granted') {
+            try {
+              const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js').catch(err => {
+                console.error("SW Registration failed for messaging:", err);
+              });
+              if (reg) {
+                const currentToken = await messaging.getToken({
+                  serviceWorkerRegistration: reg,
+                  vapidKey: "GyfIZin8bYriRUPEwWXanR1NNx9szfqfRFAaqrbiquE"
+                });
+                if (currentToken) {
+                  console.log("FCM registration token:", currentToken);
+                  await setSetting('fcmToken', currentToken);
+                } else {
+                  console.log("No registration token available.");
+                }
+              }
+            } catch (err) {
+              console.error("An error occurred while retrieving token:", err);
+            }
+          }
+        });
+      }
     }
   } catch (err) {
     console.error('Init Error:', err);
@@ -277,6 +303,9 @@ async function updateGlobalState() {
 
 async function renderDashboard() {
   await updateGlobalState();
+  if ('clearAppBadge' in navigator) {
+    navigator.clearAppBadge().catch(err => console.error("Error clearing badge:", err));
+  }
   let tasks = await getActiveTasks();
   if (currentState.activeProjectId) tasks = tasks.filter(t => t.projectId === currentState.activeProjectId);
   if (currentState.globalFilterYear || currentState.globalFilterMonth) {
