@@ -35,6 +35,36 @@ function cleanData(data) {
   return cleaned;
 }
 
+function areObjectsEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+    return false;
+  }
+  const keysA = Object.keys(a).filter(k => a[k] !== undefined && a[k] !== null);
+  const keysB = Object.keys(b).filter(k => b[k] !== undefined && b[k] !== null);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!keysB.includes(key)) return false;
+    const valA = a[key];
+    const valB = b[key];
+    if (Array.isArray(valA) && Array.isArray(valB)) {
+      if (valA.length !== valB.length) return false;
+      for (let i = 0; i < valA.length; i++) {
+        if (typeof valA[i] === 'object' && valA[i] !== null) {
+          if (!areObjectsEqual(valA[i], valB[i])) return false;
+        } else if (valA[i] !== valB[i]) {
+          return false;
+        }
+      }
+    } else if (typeof valA === 'object' && valA !== null && typeof valB === 'object' && valB !== null) {
+      if (!areObjectsEqual(valA, valB)) return false;
+    } else if (valA !== valB) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function syncToFirestore(collection, id, data) {
   try {
     await firestore.collection(collection).doc(id.toString()).set(cleanData(data));
@@ -226,13 +256,16 @@ async function deleteEmployee(id) {
 async function getAllLabels() { return db.labels.toArray(); }
 async function getLabel(id) { return db.labels.get(id); }
 async function addLabel(data) {
-  const insertData = { ...data, createdAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const insertData = { ...data, createdAt: now, updatedAt: now };
   const id = await db.labels.add(insertData);
   await syncToFirestore('labels', id, { ...insertData, id });
   return id;
 }
 async function updateLabel(id, data) {
-  await db.labels.update(id, data);
+  const now = new Date().toISOString();
+  const updateData = { ...data, updatedAt: now };
+  await db.labels.update(id, updateData);
   const fullRecord = await db.labels.get(id);
   await syncToFirestore('labels', id, fullRecord);
 }
@@ -245,12 +278,14 @@ async function deleteLabel(id) {
 async function getAllTeams() { return await db.teams.orderBy('createdAt').reverse().toArray(); }
 async function getTeam(id) { return await db.teams.get(parseInt(id)); }
 async function saveTeam(t) {
+  const now = new Date().toISOString();
+  t.updatedAt = now;
   if (t.id) {
     await db.teams.put(t);
     await syncToFirestore('teams', t.id, t);
     return t.id;
   } else {
-    t.createdAt = new Date().toISOString();
+    t.createdAt = now;
     const id = await db.teams.add(t);
     t.id = id;
     await syncToFirestore('teams', id, t);
@@ -608,7 +643,15 @@ function setupFirestoreListeners() {
           }
           
           const local = await db[col].get(docId);
-          if (!local || JSON.stringify(local) !== JSON.stringify(docData)) {
+          if (local) {
+            const localTs = new Date(local.updatedAt || local.createdAt || 0).getTime();
+            const docTs = new Date(docData.updatedAt || docData.createdAt || 0).getTime();
+            if (docTs < localTs) {
+              continue;
+            }
+          }
+          
+          if (!local || !areObjectsEqual(local, docData)) {
             await db[col].put(docData);
             hasChanges = true;
           }

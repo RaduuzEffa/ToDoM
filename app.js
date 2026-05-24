@@ -177,9 +177,6 @@ async function initApp() {
 
 function switchView(viewId) {
   currentState.view = viewId;
-  if (['dashboard', 'tasks'].includes(viewId)) {
-    if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
-  }
   DOM.navItems.forEach(nav => nav.classList.toggle('active', nav.dataset.view === viewId));
   DOM.views.forEach(v => {
     v.classList.remove('active');
@@ -301,9 +298,6 @@ async function updateGlobalState() {
 
 async function renderDashboard() {
   await updateGlobalState();
-  if (navigator.clearAppBadge) {
-    navigator.clearAppBadge().catch(()=>{});
-  }
   let tasks = await getActiveTasks();
   if (currentState.activeProjectId) tasks = tasks.filter(t => t.projectId === currentState.activeProjectId);
   if (currentState.globalFilterYear || currentState.globalFilterMonth) {
@@ -486,7 +480,7 @@ function getPriorityBadge(t) {
   else if (t.deadline) {
     const dl = new Date(t.deadline).getTime();
     if (dl < Date.now()) html += '<span class="badge badge-overdue">⚠️ Zpoždění</span>';
-    else if (dl < Date.now() + 48*3600*1000) html += '<span class="badge badge-soon">🟠 Do 48h</span>';
+    else if (dl < Date.now() + 48*3600*1000) html += '<span class="badge badge-soon">🟠 Do 48 hodin</span>';
     else if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
     else html += '<span class="badge badge-low">🟢 Běžná</span>';
   } else {
