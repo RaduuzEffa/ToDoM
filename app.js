@@ -131,6 +131,21 @@ let mdeEditor = null;
 // 2. Initialization
 // ==========================================
 async function initApp() {
+  if ('Notification' in window) {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        showToast('Oznámení byla úspěšně povolena!', 'success');
+        try {
+          new Notification('ToDoM', { body: 'Aplikace byla úspěšně propojena se systémem iOS.' });
+        } catch (e) {
+          console.error("Test notification failed:", e);
+        }
+      } else {
+        showToast('Oznámení byla zamítnuta. Povolte je v nastavení.', 'error');
+      }
+    });
+  }
+
   try {
     await initSettings();
     const appName = await getSetting('appName') || 'ToDoM';
@@ -2490,27 +2505,3 @@ async function handleTaskDrop(evt) {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
 else initApp();
-
-// Request notification permission on first user interaction (required by iOS Safari PWA)
-function enableNotificationsOnGesture() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        showToast('Oznámení byla úspěšně povolena!', 'success');
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification('ToDoM', {
-              body: 'Aplikace byla úspěšně propojena se systémem iOS.',
-              icon: 'icon-192.png',
-              badge: 'icon-192.png'
-            });
-          }).catch(()=>{});
-        }
-      } else {
-        showToast('Oznámení byla zamítnuta. Povolte je v nastavení.', 'error');
-      }
-    });
-  }
-}
-window.addEventListener('click', enableNotificationsOnGesture, { once: true });
-window.addEventListener('touchstart', enableNotificationsOnGesture, { once: true });
