@@ -591,7 +591,17 @@ function setupFirestoreListeners() {
                 const localTask = await db.tasks.get(docId);
                 // Trigger notification only if new or key fields changed compared to local Dexie
                 if (!localTask || localTask.priority !== docData.priority || localTask.status !== docData.status || localTask.deadline !== docData.deadline) {
-                  showLocalNotification("⚠️ Urgentní úkol v ToDoM", docData.title);
+                  if ('Notification' in window && Notification.permission === 'granted') {
+                    try {
+                      new Notification("⚠️ Urgentní úkol v ToDoM", { body: docData.title, icon: "icon-192.png" });
+                    } catch (e) {
+                      if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(reg => {
+                          reg.showNotification("⚠️ Urgentní úkol v ToDoM", { body: docData.title, icon: "icon-192.png" });
+                        }).catch(()=>{});
+                      }
+                    }
+                  }
                 }
               }
             }

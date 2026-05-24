@@ -131,6 +131,21 @@ let mdeEditor = null;
 // 2. Initialization
 // ==========================================
 async function initApp() {
+  if ('Notification' in window) {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        showToast('Oznámení byla úspěšně povolena!', 'success');
+        try {
+          new Notification('ToDoM', { body: 'Aplikace byla úspěšně propojena se systémem iOS.' });
+        } catch (e) {
+          console.error("Test notification failed:", e);
+        }
+      } else {
+        showToast('Oznámení byla zamítnuta. Povolte je v nastavení.', 'error');
+      }
+    });
+  }
+
   try {
     await initSettings();
     const appName = await getSetting('appName') || 'ToDoM';
@@ -147,12 +162,6 @@ async function initApp() {
     
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
-    }
-    
-    if ('Notification' in window) {
-      Notification.requestPermission().then(permission => {
-        console.log("Notification permission state:", permission);
-      });
     }
   } catch (err) {
     console.error('Init Error:', err);
