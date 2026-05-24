@@ -152,6 +152,17 @@ async function initApp() {
     DOM.headerTitle.textContent = appName;
     document.title = appName;
     
+    // Dynamic year filter options generation
+    const currentYear = new Date().getFullYear();
+    const startYear = 2024;
+    const endYear = Math.max(currentYear + 10, 2045);
+    let yearOptions = '<option value="">Všechny</option>';
+    for (let y = startYear; y <= endYear; y++) {
+      yearOptions += `<option value="${y}">${y}</option>`;
+    }
+    const filterYearEl = document.getElementById('global-filter-year');
+    if (filterYearEl) filterYearEl.innerHTML = yearOptions;
+    
     setupEventListeners();
     await updateGlobalState();
     
