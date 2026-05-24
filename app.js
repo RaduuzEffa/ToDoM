@@ -147,32 +147,12 @@ async function initApp() {
     
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
-      
-      if ('Notification' in window && typeof messaging !== 'undefined' && messaging) {
-        Notification.requestPermission().then(async (permission) => {
-          if (permission === 'granted') {
-            try {
-              const reg = await navigator.serviceWorker.register('./firebase-messaging-sw.js').catch(err => {
-                console.error("SW Registration failed for messaging:", err);
-              });
-              if (reg) {
-                const currentToken = await messaging.getToken({
-                  serviceWorkerRegistration: reg,
-                  vapidKey: "GyfIZin8bYriRUPEwWXanR1NNx9szfqfRFAaqrbiquE"
-                });
-                if (currentToken) {
-                  console.log("FCM registration token:", currentToken);
-                  await setSetting('fcmToken', currentToken);
-                } else {
-                  console.log("No registration token available.");
-                }
-              }
-            } catch (err) {
-              console.error("An error occurred while retrieving token:", err);
-            }
-          }
-        });
-      }
+    }
+    
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        console.log("Notification permission state:", permission);
+      });
     }
   } catch (err) {
     console.error('Init Error:', err);
@@ -182,6 +162,9 @@ async function initApp() {
 
 function switchView(viewId) {
   currentState.view = viewId;
+  if (['dashboard', 'tasks'].includes(viewId)) {
+    if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+  }
   DOM.navItems.forEach(nav => nav.classList.toggle('active', nav.dataset.view === viewId));
   DOM.views.forEach(v => {
     v.classList.remove('active');
@@ -303,8 +286,8 @@ async function updateGlobalState() {
 
 async function renderDashboard() {
   await updateGlobalState();
-  if ('clearAppBadge' in navigator) {
-    navigator.clearAppBadge().catch(err => console.error("Error clearing badge:", err));
+  if (navigator.clearAppBadge) {
+    navigator.clearAppBadge().catch(()=>{});
   }
   let tasks = await getActiveTasks();
   if (currentState.activeProjectId) tasks = tasks.filter(t => t.projectId === currentState.activeProjectId);
