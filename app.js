@@ -461,10 +461,10 @@ function getPriorityBadge(t) {
     if (dl < Date.now()) html += '<span class="badge badge-overdue">⚠️ Zpoždění</span>';
     else if (dl < Date.now() + 48*3600*1000) html += '<span class="badge badge-soon">🟠 Do 48h</span>';
     else if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Průběžná</span>';
+    else html += '<span class="badge badge-low">🟢 Běžná</span>';
   } else {
     if (t.priority === 'medium') html += '<span class="badge badge-medium">🟠 Do 48 hodin</span>';
-    else html += '<span class="badge badge-low">🟢 Průběžná</span>';
+    else html += '<span class="badge badge-low">🟢 Běžná</span>';
   }
   return html;
 }
