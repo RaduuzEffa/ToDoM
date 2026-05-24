@@ -47,3 +47,26 @@ self.addEventListener('fetch', e => {
     })
   );
 });
+
+self.addEventListener('push', e => {
+  let title = "⚠️ Urgentní úkol v ToDoM";
+  let body = "Máte nový nebo upravený urgentní úkol.";
+  
+  if (e.data) {
+    try {
+      const data = e.data.json();
+      title = data.title || title;
+      body = data.body || body;
+    } catch (err) {
+      body = e.data.text() || body;
+    }
+  }
+  
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: body,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png'
+    })
+  );
+});

@@ -162,6 +162,12 @@ async function initApp() {
     
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      
+      navigator.serviceWorker.ready.then(registration => {
+        if (registration.pushManager) {
+          console.log('Push Manager je připraven pro iOS');
+        }
+      });
     }
   } catch (err) {
     console.error('Init Error:', err);
